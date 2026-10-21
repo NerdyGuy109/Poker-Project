@@ -9,10 +9,17 @@
 <body>
   <header class="site-header">
     <h1>Poker Board Analyzer</h1>
-    <p class="subtitle">Deal a board, then see how many combos of every hand class it leaves.</p>
+    <p class="subtitle">Deal a board, then see how many starting hands fall into every hand class.</p>
   </header>
 
   <main>
+    <nav class="game-tabs" role="tablist" aria-label="Game">
+      <button type="button" role="tab" data-game="nlhe"><span class="long">No-limit hold&rsquo;em</span><span class="short">NLHE</span></button>
+      <button type="button" role="tab" data-game="plo"><span class="long">Pot-limit Omaha</span><span class="short">PLO</span></button>
+      <button type="button" role="tab" data-game="plo8"><span class="long">PLO hi-lo (8 or better)</span><span class="short">PLO8</span></button>
+    </nav>
+    <p class="game-note" id="game-note"></p>
+
     <section class="panel board-panel" aria-labelledby="board-heading">
       <h2 id="board-heading" class="visually-hidden">Community cards</h2>
       <div class="board">
@@ -75,7 +82,7 @@
     </section>
 
     <div class="layout">
-      <section class="panel grid-panel" aria-labelledby="grid-heading">
+      <section class="panel grid-panel" id="grid-panel" aria-labelledby="grid-heading">
         <div class="panel-head">
           <h2 id="grid-heading">Hand grid</h2>
           <span class="hint">Suited above the diagonal, offsuit below. Click a cell to see its combos.</span>
@@ -84,16 +91,48 @@
         <div class="cell-detail" id="cell-detail"></div>
       </section>
 
+      <section class="panel omaha-panel" id="omaha-panel" aria-labelledby="dist-heading" hidden>
+        <div class="panel-head">
+          <h2 id="dist-heading">Hand distribution</h2>
+          <span class="hint">Share of all starting hands in each highlighted group.</span>
+        </div>
+        <div class="dist-bar" id="dist-bar"></div>
+        <ul class="dist-legend" id="dist-legend"></ul>
+
+        <form class="check-hand" id="check-form" novalidate>
+          <label for="check-text">Check a hand</label>
+          <div class="input-row">
+            <input id="check-text" type="text" placeholder="e.g. As Ks Qd Jd" autocomplete="off" spellcheck="false" autocapitalize="off">
+            <button type="submit">Check</button>
+          </div>
+          <div class="check-result" id="check-result"></div>
+        </form>
+
+        <div class="examples">
+          <div class="examples-head">
+            <label for="example-cat">Example hands</label>
+            <select id="example-cat"></select>
+            <button type="button" id="example-shuffle">Shuffle</button>
+          </div>
+          <ul class="combo-list" id="example-list"></ul>
+        </div>
+      </section>
+
       <section class="panel categories-panel" aria-labelledby="cat-heading">
         <div class="panel-head">
           <h2 id="cat-heading">Hand groups</h2>
           <label class="priority-toggle">
-            <input type="checkbox" id="draws-first">
-            Draws take priority
+            Color first
+            <select id="color-priority">
+              <option value="made">Made hands</option>
+              <option value="draw">Draws</option>
+              <option value="low">Lows</option>
+            </select>
           </label>
         </div>
-        <p class="hint">Tick a group to color it on the grid. Click the swatch to change its color.
-          If a combo fits several ticked groups, it takes the color of the first one in the list.</p>
+        <p class="hint">Tick a group to highlight it. Click the swatch to change its color.
+          If a hand fits several ticked groups, it takes the color of the first one in the list
+          (&ldquo;Color first&rdquo; picks which section goes first).</p>
         <div id="category-tables"></div>
         <div class="highlight-total" id="highlight-total"></div>
       </section>

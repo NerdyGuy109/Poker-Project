@@ -246,3 +246,42 @@ tr.on .bar { opacity: 1; }
   .bar-cell { display: none; }
   .cell-count { display: none; }
 }
+
+/* ---------- Game tabs ---------- */
+
+.game-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--button-bg); border-radius: 10px; width: fit-content; max-width: 100%; }
+.game-tabs button { background: transparent; font-weight: 500; padding: 7px 14px; }
+.game-tabs button.active { background: var(--panel); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); color: var(--accent); font-weight: 650; }
+.game-note { color: var(--muted); font-size: 0.85rem; margin: 6px 2px 14px; }
+.priority-toggle select { font: inherit; font-size: 0.85rem; color: var(--text); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 6px; padding: 2px 4px; }
+
+/* ---------- Omaha panel ---------- */
+
+.dist-bar { display: flex; height: 26px; border-radius: 6px; overflow: hidden; background: var(--cell-bg); }
+.dist-seg { min-width: 0; }
+.dist-seg.rest { background: var(--cell-bg); }
+.dist-legend { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
+.dist-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+.check-hand { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--panel-border); }
+.check-hand label, .examples-head label { font-weight: 600; font-size: 0.95rem; }
+.input-row { display: flex; gap: 6px; margin-top: 6px; }
+.panel input[type="text"], .examples select {
+  font: inherit; font-size: 0.9rem; color: var(--text); background: var(--panel);
+  border: 1px solid var(--panel-border); border-radius: 7px; padding: 5px 8px;
+}
+.check-hand input { width: 220px; max-width: 100%; }
+.check-result { margin-top: 10px; display: grid; gap: 4px; font-size: 0.9rem; }
+.check-result:empty { display: none; }
+.check-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.check-error { color: #d0263a; margin: 0; }
+
+.examples { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--panel-border); }
+.examples-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.examples select { max-width: 100%; min-width: 0; }
+.game-tabs .short { display: none; }
+@media (max-width: 560px) {
+  .game-tabs .long { display: none; }
+  .game-tabs .short { display: inline; }
+}

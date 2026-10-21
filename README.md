@@ -1,6 +1,6 @@
 # Poker Board Analyzer
 
-A static website for poker math. It deals a board and counts how many hole-card combos fall into each hand group.
+A static website for poker math. It deals a board and counts how many starting hands fall into each hand group, for **no-limit hold'em**, **pot-limit Omaha** and **PLO hi-lo (8 or better)**. Pick the game with the tabs at the top.
 
 ## Running it
 
@@ -13,6 +13,17 @@ There's no build step. Open `index.html` in a browser, or serve the folder (for 
 - **Choosing specific cards:** click any card slot on the board to pick that card from a deck view. Cards already on the board are greyed out, and the picker also offers *Random card* and *Remove card*. You can also type a whole board (`As Kd 7c`, `askd7c2h` and `A♠ K♦ 7♣` all work; tens can be typed as `T` or `10`, so `Td` and `10d` are the same card) and press *Set*.
 - **Combo counts:** every hole-card combo that doesn't collide with the board is classified: 1,176 on the flop, 1,128 on the turn, 1,081 on the river. Each group shows its combo count and its share of the total.
 - **Highlighting:** tick any group to color it on the 13×13 hand grid, and pick its color with the swatch. Each cell fills from the bottom in proportion to how many of its live combos are in each highlighted group. Click a cell to list its combos and their groups. Your choices are saved in the browser.
+
+## Games
+
+- **No-limit hold'em:** 2 hole cards, and your best five cards can use any number of them. Shown on the 13×13 grid.
+- **Pot-limit Omaha:** 4 hole cards, and every hand must use **exactly two** hole cards and three board cards. So a single suited card is never a flush draw, and four to a straight on the board plus one hole card isn't a straight. There are too many hands for a grid (211,876 on the flop), so you get:
+  - a **distribution bar** of the highlighted groups
+  - a **Check a hand** box (type 4 cards to see their groups, best high hand and low)
+  - **example hands**: a random sample from any group
+- **PLO hi-lo (8 or better):** Omaha rules, plus a low group. A low uses five different cards 8 or lower (aces low), again with exactly two hole cards. The groups are *Nut low* (the best low possible on the board), *Any made low* and *Low draw* (the next card can make a low).
+
+Omaha draws add **Wrap (9+ straight outs)**. *Open-ended* means 5–8 outs and *Gutshot* means 1–4. Outs are counted as unseen cards, so your own cards reduce them. Made-hand groups work like hold'em, applied to the best two-card pair from your four cards.
 
 ## Hand groups
 
@@ -43,11 +54,11 @@ A board pair doesn't count toward your hand: on K‑K‑7, holding 7‑x is a *m
 | Two overcards | Unpaired, with both hole cards above the board |
 | Backdoor flush draw | Flop only: three to a flush |
 
-If a combo is in more than one highlighted group, it takes the color of the first one in the list. Tick *Draws take priority* to put draws ahead of made hands.
+If a hand is in more than one highlighted group, it takes the color of the first one in the list. *Color first* chooses which section (made hands, draws or lows) goes first.
 
 ## Project layout
 
 - `index.html`, `css/styles.css`: the page
-- `js/poker.js`: cards, hand evaluator, classifier, range analysis (no DOM; also loads in Node)
+- `js/poker.js`: cards, hand evaluator, hold'em and Omaha classifiers, range analysis (no DOM; also loads in Node)
 - `js/app.js`: UI
 - `tests/`: unit tests, run with `npm test` (Node 18+)

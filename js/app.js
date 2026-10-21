@@ -11,7 +11,10 @@
     river: null,
     analysis: null,
     selectedCell: null,
-    drawsFirst: false,
+    game: 'nlhe',
+    priorityGroup: 'made', // which section of hand groups gets color first
+    exampleCat: null,
+    checkText: '',
     highlight: {}, // category id -> { on, color }
     texture: { suits: 'any', pairing: 'any' },
     pickerSlot: null, // 'flop-0' | 'flop-1' | 'flop-2' | 'turn' | 'river' while the card picker is open
@@ -19,6 +22,17 @@
 
   const $ = (id) => document.getElementById(id);
   const catById = Object.fromEntries(P.CATEGORIES.map((c) => [c.id, c]));
+  const game = () => P.GAMES[state.game];
+  const isOmaha = () => state.game !== 'nlhe';
+  const catName = (id) => P.categoryName(id, state.game);
+  const gameCategories = () => game().categoryIds.map((id) => catById[id]);
+  const handWord = () => (isOmaha() ? 'hands' : 'combos');
+
+  const GAME_NOTES = {
+    nlhe: 'Two hole cards; your best five cards can use one, both or neither of them.',
+    plo: 'Four hole cards; every hand must use exactly two of them with three board cards.',
+    plo8: 'Four hole cards, exactly two used for each half. The pot splits between the best high and the best low (five different cards 8 or lower, aces low).',
+  };
 
   // ---------------------------------------------------------------------------
   // Settings (remembered per browser)
@@ -36,22 +50,24 @@
         color: s.color || cat.color,
       };
     }
-    state.drawsFirst = !!saved.drawsFirst;
+    if (P.GAMES[saved.game]) state.game = saved.game;
+    state.priorityGroup = ['made', 'draw', 'low'].includes(saved.priorityGroup) ? saved.priorityGroup
+      : saved.drawsFirst ? 'draw' : 'made';
     const t = saved.texture || {};
     if (P.textureIsPossible(t.suits, t.pairing)) state.texture = { suits: t.suits || 'any', pairing: t.pairing || 'any' };
   }
 
   function saveSettings() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ highlight: state.highlight, drawsFirst: state.drawsFirst, texture: state.texture }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ highlight: state.highlight, priorityGroup: state.priorityGroup, texture: state.texture, game: state.game }));
     } catch (e) { /* storage unavailable */ }
   }
 
   // Categories in priority order for coloring.
   function priorityOrder() {
-    const made = P.CATEGORIES.filter((c) => c.group === 'made');
-    const draws = P.CATEGORIES.filter((c) => c.group === 'draw');
-    return state.drawsFirst ? draws.concat(made) : made.concat(draws);
+    const cats = gameCategories();
+    const first = cats.some((c) => c.group === state.priorityGroup) ? state.priorityGroup : 'made';
+    return cats.filter((c) => c.group === first).concat(cats.filter((c) => c.group !== first));
   }
 
   // ---------------------------------------------------------------------------
@@ -183,7 +199,7 @@
     const textureText = { monotone: 'Monotone', 'two-tone': 'Two-tone', rainbow: 'Rainbow' }[t.suits] +
       (t.pairing === 'unpaired' ? '' : t.pairing === 'paired' ? ', paired' : ', trips');
     $('summary').innerHTML = '<strong>' + street + '</strong> &middot; ' + textureText + ' flop &middot; ' +
-      a.total.toLocaleString() + ' possible hole-card combos ' +
+      a.total.toLocaleString() + (isOmaha() ? ' possible 4-card hands ' : ' possible hole-card combos ') +
       '<span class="muted">(' + (52 - boardCards().length) + ' unseen cards)</span>';
   }
 
@@ -232,19 +248,25 @@
 
   function renderCategories() {
     const a = state.analysis;
+    const river = a && boardCards().length === 5;
     const groups = [
-      { id: 'made', title: 'Made hands', note: 'Each combo is counted in exactly one made-hand group.' },
-      { id: 'draw', title: 'Draws', note: a && boardCards().length === 5 ? 'No draws on the river.' : 'A combo can have several draws, or a draw plus a made hand.' },
+      { id: 'made', title: 'Made hands', note: 'Each ' + handWord().slice(0, -1) + ' is counted in exactly one made-hand group.' },
+      { id: 'draw', title: 'Draws', note: river ? 'No draws on the river.'
+        : isOmaha() ? 'Draws need two hole cards: one suited card is never a flush draw. Straight outs are counted as unseen cards.'
+          : 'A combo can have several draws, or a draw plus a made hand.' },
     ];
+    if (game().hiLo) {
+      groups.push({ id: 'low', title: 'Low (8 or better)', note: 'Nut low is the best low possible on this board. A low draw can make a low with the next card.' });
+    }
 
     $('category-tables').innerHTML = groups.map((g) => {
-      const rows = P.CATEGORIES.filter((c) => c.group === g.id).map((cat) => {
+      const rows = gameCategories().filter((c) => c.group === g.id).map((cat) => {
         const h = state.highlight[cat.id];
         const n = a ? a.counts[cat.id] : 0;
         return '<tr class="' + (h.on ? 'on' : '') + (n ? '' : ' zero') + '">' +
-          '<td><input type="checkbox" data-toggle="' + cat.id + '"' + (h.on ? ' checked' : '') + ' aria-label="Highlight ' + cat.name + '"></td>' +
-          '<td><input type="color" data-color="' + cat.id + '" value="' + h.color + '" aria-label="Color for ' + cat.name + '"></td>' +
-          '<td class="name" data-toggle-row="' + cat.id + '">' + cat.name + '</td>' +
+          '<td><input type="checkbox" data-toggle="' + cat.id + '"' + (h.on ? ' checked' : '') + ' aria-label="Highlight ' + catName(cat.id) + '"></td>' +
+          '<td><input type="color" data-color="' + cat.id + '" value="' + h.color + '" aria-label="Color for ' + catName(cat.id) + '"></td>' +
+          '<td class="name" data-toggle-row="' + cat.id + '">' + catName(cat.id) + '</td>' +
           '<td class="num">' + n + '</td>' +
           '<td class="num pct">' + pct(n, a ? a.total : 0) + '</td>' +
           '<td class="bar-cell"><span class="bar" style="width:' + (a && a.total ? 100 * n / a.total : 0) + '%;background:' + h.color + '"></span></td>' +
@@ -255,7 +277,7 @@
         '<span class="group-buttons"><button type="button" class="link" data-group-all="' + g.id + '">All</button>' +
         '<button type="button" class="link" data-group-none="' + g.id + '">None</button></span></div>' +
         '<p class="hint">' + g.note + '</p>' +
-        '<table class="cat-table"><thead><tr><th></th><th></th><th>Group</th><th class="num">Combos</th><th class="num">%</th><th></th></tr></thead>' +
+        '<table class="cat-table"><thead><tr><th></th><th></th><th>Group</th><th class="num">' + (isOmaha() ? 'Hands' : 'Combos') + '</th><th class="num">%</th><th></th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table></div>';
     }).join('');
 
@@ -268,9 +290,17 @@
       $('highlight-total').innerHTML = '';
       return;
     }
-    const on = new Set(Object.keys(state.highlight).filter((id) => state.highlight[id].on));
-    const n = a.combos.filter((c) => c.categories.some((id) => on.has(id))).length;
-    $('highlight-total').innerHTML = 'Highlighted: <strong>' + n + '</strong> of ' + a.total + ' combos <span class="muted">(' + pct(n, a.total) + ')</span>';
+    let n;
+    if (isOmaha()) {
+      const pos = omahaPriority();
+      n = 0;
+      for (let i = 0; i < a.total; i++) if (omahaColorIndex(i, pos) >= 0) n++;
+    } else {
+      const on = new Set(Object.keys(state.highlight).filter((id) => state.highlight[id].on));
+      n = a.combos.filter((c) => c.categories.some((id) => on.has(id))).length;
+    }
+    $('highlight-total').innerHTML = 'Highlighted: <strong>' + n.toLocaleString() + '</strong> of ' + a.total.toLocaleString() + ' ' + handWord() +
+      ' <span class="muted">(' + pct(n, a.total) + ')</span>';
   }
 
   // ---------------------------------------------------------------------------
@@ -363,7 +393,7 @@
     const items = cell.combos.map((combo) => {
       const chips = combo.categories.map((id) => {
         const h = state.highlight[id];
-        return '<span class="chip' + (h.on ? ' on' : '') + '" style="--chip:' + h.color + '">' + catById[id].name + '</span>';
+        return '<span class="chip' + (h.on ? ' on' : '') + '" style="--chip:' + h.color + '">' + catName(id) + '</span>';
       }).join('');
       return '<li><span class="combo-cards">' + combo.cards.map((c) => cardHTML(c, true)).join('') + '</span>' + chips + '</li>';
     }).join('');
@@ -372,26 +402,173 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Omaha view: distribution bar, a hand checker and example hands
+  // ---------------------------------------------------------------------------
+
+  // For fast per-hand coloring: priority position of each made index and flag bit, or -1 if not highlighted.
+  function omahaPriority() {
+    const a = state.analysis;
+    const order = priorityOrder().map((c) => c.id);
+    const posOf = (id) => (state.highlight[id].on ? order.indexOf(id) : -1);
+    return { order, made: a.madeIds.map(posOf), flags: a.flagIds.map(posOf) };
+  }
+
+  // Priority position of the group that colors hand i, or -1.
+  function omahaColorIndex(i, pos) {
+    const a = state.analysis;
+    let best = pos.made[a.made[i]];
+    if (best < 0) best = Infinity;
+    for (let f = a.flags[i], b = 0; f; f >>>= 1, b++) {
+      if ((f & 1) && pos.flags[b] >= 0 && pos.flags[b] < best) best = pos.flags[b];
+    }
+    return best === Infinity ? -1 : best;
+  }
+
+  function chipsHTML(ids) {
+    return ids.map((id) => {
+      const h = state.highlight[id];
+      return '<span class="chip' + (h.on ? ' on' : '') + '" style="--chip:' + h.color + '">' + catName(id) + '</span>';
+    }).join('');
+  }
+
+  function renderOmaha() {
+    const a = state.analysis;
+    if (!a) {
+      $('dist-bar').innerHTML = '';
+      $('dist-legend').innerHTML = '<li class="hint">The distribution fills in once the flop is complete.</li>';
+      $('example-list').innerHTML = '';
+      $('check-result').innerHTML = '';
+      return;
+    }
+
+    const pos = omahaPriority();
+    const tally = new Array(pos.order.length).fill(0);
+    for (let i = 0; i < a.total; i++) {
+      const p = omahaColorIndex(i, pos);
+      if (p >= 0) tally[p]++;
+    }
+    const segments = pos.order.map((id, p) => ({ id, n: tally[p] })).filter((s) => s.n);
+    $('dist-bar').innerHTML = segments.map((s) =>
+      '<span class="dist-seg" style="flex-grow:' + s.n + ';background:' + state.highlight[s.id].color + '" title="' +
+      catName(s.id) + ': ' + s.n.toLocaleString() + ' hands (' + pct(s.n, a.total) + ')"></span>').join('') +
+      '<span class="dist-seg rest" style="flex-grow:' + (a.total - segments.reduce((n, s) => n + s.n, 0)) + '"></span>';
+    $('dist-legend').innerHTML = segments.length
+      ? segments.map((s) => '<li><span class="swatch" style="background:' + state.highlight[s.id].color + '"></span>' +
+        catName(s.id) + ' <span class="muted">' + pct(s.n, a.total) + '</span></li>').join('')
+      : '<li class="hint">Tick some hand groups to see their share here.</li>';
+
+    renderExamples(false);
+    renderCheck();
+  }
+
+  // Keeps the same sample while only colors or highlights change; reshuffle draws a new one.
+  let examplePicks = { analysis: null, cat: null, picks: [] };
+
+  function renderExamples(reshuffle) {
+    const a = state.analysis;
+    const options = gameCategories().filter((c) => a.counts[c.id] > 0);
+    if (!options.some((c) => c.id === state.exampleCat)) {
+      const firstLit = options.find((c) => state.highlight[c.id].on);
+      state.exampleCat = (firstLit || options[0]).id;
+    }
+    $('example-cat').innerHTML = options.map((c) =>
+      '<option value="' + c.id + '"' + (c.id === state.exampleCat ? ' selected' : '') + '>' +
+      catName(c.id) + ' (' + a.counts[c.id].toLocaleString() + ')</option>').join('');
+
+    if (reshuffle || examplePicks.analysis !== a || examplePicks.cat !== state.exampleCat) {
+      examplePicks = { analysis: a, cat: state.exampleCat, picks: sampleHands(a, state.exampleCat, 12) };
+    }
+    $('example-list').innerHTML = examplePicks.picks.map((i) =>
+      '<li><span class="combo-cards">' + a.cardsOf(i).map((c) => cardHTML(c, true)).join('') + '</span>' +
+      chipsHTML(a.categoriesOf(i)) + '</li>').join('');
+  }
+
+  // Reservoir-samples up to n random hand indexes from one group.
+  function sampleHands(a, catId, n) {
+    const made = a.madeIds.indexOf(catId);
+    const bit = 1 << a.flagIds.indexOf(catId);
+    const picks = [];
+    let seen = 0;
+    for (let i = 0; i < a.total; i++) {
+      if (made >= 0 ? a.made[i] !== made : !(a.flags[i] & bit)) continue;
+      seen++;
+      if (picks.length < n) picks.push(i);
+      else {
+        const j = Math.floor(Math.random() * seen);
+        if (j < n) picks[j] = i;
+      }
+    }
+    return picks;
+  }
+
+  function renderCheck() {
+    const el = $('check-result');
+    const text = state.checkText.trim();
+    if (!text || !state.analysis) {
+      el.innerHTML = '';
+      return;
+    }
+    let hand;
+    try {
+      hand = P.parseCardList(text);
+      if (hand.length !== 4) throw new Error('Enter exactly 4 cards.');
+      const onBoard = hand.filter((c) => boardCards().includes(c));
+      if (onBoard.length) throw new Error(onBoard.map(P.cardToString).join(', ') + ' is already on the board.');
+    } catch (e) {
+      el.innerHTML = '<p class="check-error">' + e.message + '</p>';
+      return;
+    }
+    const r = P.classifyOmaha(hand, boardCards(), state.game);
+    let lowLine = '';
+    if (game().hiLo) {
+      lowLine = '<div><span class="muted">Low:</span> ' + (r.low === P.NO_LOW ? 'none' : P.lowToString(r.low) + (r.isNutLow ? ' (the nuts)' : '')) + '</div>';
+    }
+    el.innerHTML = '<div class="combo-list"><div class="check-row"><span class="combo-cards">' +
+      hand.slice().sort((x, y) => y - x).map((c) => cardHTML(c, true)).join('') + '</span>' + chipsHTML(r.categories) + '</div></div>' +
+      '<div><span class="muted">Best high hand:</span> ' + P.HAND_NAMES[r.high.category] + '</div>' + lowLine;
+  }
+
+  function renderRange() {
+    if (isOmaha()) renderOmaha();
+    else renderGrid();
+  }
+
+  function renderGame() {
+    for (const tab of document.querySelectorAll('[data-game]')) {
+      const on = tab.dataset.game === state.game;
+      tab.classList.toggle('active', on);
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    $('game-note').textContent = GAME_NOTES[state.game];
+    $('grid-panel').hidden = isOmaha();
+    $('omaha-panel').hidden = !isOmaha();
+    const lowOpt = $('color-priority').querySelector('option[value="low"]');
+    lowOpt.hidden = lowOpt.disabled = !game().hiLo;
+    $('color-priority').value = state.priorityGroup === 'low' && !game().hiLo ? 'made' : state.priorityGroup;
+  }
+
+  // ---------------------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------------------
 
   function update() {
-    state.analysis = flopComplete() ? P.analyzeBoard(boardCards()) : null;
+    state.analysis = flopComplete() ? P.analyzeBoard(boardCards(), state.game) : null;
     $('board-text').value = boardCards().map(P.cardToString).join(' ');
     $('board-error').textContent = '';
+    renderGame();
     renderBoard();
     renderCategories();
-    renderGrid();
+    renderRange();
   }
 
   function refreshHighlights() {
     saveSettings();
     renderCategories();
-    renderGrid();
+    renderRange();
   }
 
   function setGroup(group, on) {
-    for (const cat of P.CATEGORIES) if (cat.group === group) state.highlight[cat.id].on = on;
+    for (const cat of gameCategories()) if (cat.group === group) state.highlight[cat.id].on = on;
     refreshHighlights();
   }
 
@@ -432,11 +609,30 @@
       if (e.target === $('picker')) $('picker').close();
     });
 
-    $('draws-first').checked = state.drawsFirst;
-    $('draws-first').addEventListener('change', (e) => {
-      state.drawsFirst = e.target.checked;
-      saveSettings();
-      renderGrid();
+    for (const tab of document.querySelectorAll('[data-game]')) {
+      tab.addEventListener('click', () => {
+        if (state.game === tab.dataset.game) return;
+        state.game = tab.dataset.game;
+        state.selectedCell = null;
+        saveSettings();
+        update();
+      });
+    }
+
+    $('color-priority').addEventListener('change', (e) => {
+      state.priorityGroup = e.target.value;
+      refreshHighlights();
+    });
+
+    $('example-cat').addEventListener('change', (e) => {
+      state.exampleCat = e.target.value;
+      renderExamples(true);
+    });
+    $('example-shuffle').addEventListener('click', () => renderExamples(true));
+    $('check-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      state.checkText = $('check-text').value;
+      renderCheck();
     });
 
     const tables = $('category-tables');
@@ -453,7 +649,7 @@
       if (t.dataset.color) {
         state.highlight[t.dataset.color].color = t.value;
         saveSettings();
-        renderGrid();
+        renderRange();
       }
     });
     tables.addEventListener('change', (e) => {

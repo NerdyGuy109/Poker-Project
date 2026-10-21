@@ -127,3 +127,55 @@ test('drawFlop deals the requested texture, or null when impossible', () => {
   assert.equal(P.textureIsPossible('two-tone', 'trips'), false);
   assert.equal(P.textureIsPossible('rainbow', 'trips'), true);
 });
+
+const omaha = (hand, board, game) => P.classifyOmaha(cards(hand), cards(board), game || 'plo');
+
+test('Omaha hands must use exactly two hole cards', () => {
+  // Hold'em plays the ace of hearts for a flush; Omaha can't use one heart.
+  assert.equal(classify('Ah Kd', '2h 5h 9h Th 3c').made, 'flush');
+  assert.deepEqual(omaha('Ah Kd Qc Jc', '2h 5h 9h Th 3c').categories, ['ace-high']);
+  assert.deepEqual(omaha('Ah Kh Qc Jc', '2h 5h 9h Th 3c').categories, ['flush']);
+  // Four to a straight on board plus one hole card isn't a straight in Omaha.
+  assert.equal(omaha('9c 2d 2s 3h', '5h 6c 7d 8s Kh').high.category, P.HAND.PAIR);
+  assert.deepEqual(omaha('As Ah 7c 2d', 'Kh 9s 4d').categories.slice(0, 1), ['overpair']);
+});
+
+test('Omaha draws', () => {
+  // The classic 20-out wrap.
+  assert.ok(omaha('9c 8d 5h 4s', '7h 6c 2d').categories.includes('wrap'));
+  const fd = omaha('As Ks Qd Jd', 'Ah 7s 2s').categories;
+  assert.equal(fd[0], 'top-pair');
+  assert.ok(fd.includes('flush-draw') && fd.includes('nut-flush-draw'));
+  // A single suited card with two on board is no flush draw in Omaha.
+  assert.ok(!omaha('As Kd Qc Jh', 'Ah 7s 2s').categories.includes('flush-draw'));
+  assert.ok(omaha('Kc Qc 9d 4h', 'Ac 7h 2s').categories.includes('backdoor-flush-draw'));
+});
+
+test('PLO8 lows', () => {
+  const r = omaha('Ac 3d Ks Qh', '2c 5d 8h Kc Js', 'plo8');
+  assert.equal(P.lowToString(r.low), '8-5-3-2-A low');
+  assert.ok(r.categories.includes('nut-low') && r.categories.includes('any-low'));
+  const weaker = omaha('Ac 4d Ks Qh', '2c 5d 8h Kc Js', 'plo8');
+  assert.ok(weaker.categories.includes('any-low') && !weaker.categories.includes('nut-low'));
+  assert.ok(omaha('Ac 3d Qs Qh', '2c 5d Kh', 'plo8').categories.includes('low-draw'));
+  assert.equal(omaha('Ac 3d Qs Qh', '9c Td Kh', 'plo8').low, P.NO_LOW);
+  assert.ok(!omaha('Ac 3d Qs Qh', '9c Td Kh', 'plo8').categories.includes('low-draw'));
+  // No low categories in plain PLO.
+  assert.ok(!omaha('Ac 3d Ks Qh', '2c 5d 8h Kc Js', 'plo').categories.includes('any-low'));
+});
+
+test('analyzeBoard counts every Omaha hand once', () => {
+  const flop = P.analyzeBoard(cards('Kc 7d 2s'), 'plo');
+  assert.equal(flop.total, 211876);
+  const madeTotal = P.GAMES.plo.categoryIds.filter((id) => P.CATEGORIES.find((c) => c.id === id).group === 'made')
+    .reduce((n, id) => n + flop.counts[id], 0);
+  assert.equal(madeTotal, 211876);
+  // Spot check: the per-hand categories match the single-hand classifier.
+  for (const i of [0, 1234, 99999, 211875]) {
+    assert.deepEqual(flop.categoriesOf(i), omaha(flop.cardsOf(i).map(P.cardToString).join(' '), 'Kc 7d 2s').categories);
+  }
+  const river = P.analyzeBoard(cards('Kc 7d 2s 3h 4c'), 'plo8');
+  assert.equal(river.total, 178365);
+  assert.ok(river.counts['any-low'] >= river.counts['nut-low'] && river.counts['nut-low'] > 0);
+  assert.equal(river.counts['low-draw'], 0);
+});
