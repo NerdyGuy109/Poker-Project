@@ -119,6 +119,56 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .card .rank { font-size: 1.6rem; }
 .card .pip { font-size: 1.5rem; margin-top: 2px; }
 .card.empty { background: transparent; border: 2px dashed rgba(255, 255, 255, 0.4); box-shadow: none; }
+.card.empty .plus { font-size: 1.6rem; font-weight: 400; color: rgba(255, 255, 255, 0.55); }
+
+.board-panel button.slot { padding: 0; background: none; border: 0; border-radius: 8px; transition: transform 0.12s; }
+.board-panel button.slot:hover:not(:disabled) { background: none; transform: translateY(-3px); }
+.board-panel button.slot:hover:not(:disabled) .card.empty { border-color: rgba(255, 255, 255, 0.85); }
+.board-panel button.slot:disabled { opacity: 0.35; }
+
+.board-controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 12px 28px; margin-top: 18px; }
+.texture { border: 0; margin: 0; padding: 0; display: flex; gap: 10px; align-items: flex-end; }
+.texture legend { float: left; width: 100%; padding: 0; margin-bottom: 4px; }
+.texture legend, .board-input label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.75; }
+.texture label { display: flex; flex-direction: column; gap: 2px; font-size: 0.8rem; }
+.board-panel select, .board-panel input[type="text"] {
+  font: inherit; font-size: 0.9rem; color: #fff;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 7px; padding: 5px 8px;
+}
+.board-panel select option { color: #1d2125; background: #fff; }
+.board-panel select option:disabled { color: #a0a4a8; }
+.board-panel input[type="text"]::placeholder { color: rgba(255, 255, 255, 0.5); }
+.board-input { display: flex; flex-direction: column; gap: 4px; }
+.board-input-row { display: flex; gap: 6px; }
+.board-input input { width: 170px; }
+.board-error { text-align: center; color: #ffd7d7; min-height: 0; margin: 8px 0 0; font-size: 0.9rem; }
+.board-error:empty { display: none; }
+.board-hint { text-align: center; margin: 4px 0 0; font-size: 0.8rem; opacity: 0.7; }
+
+.grid-empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; margin: 0; }
+
+/* ---------- Card picker ---------- */
+
+.picker {
+  border: 1px solid var(--panel-border); border-radius: var(--radius);
+  background: var(--panel); color: var(--text);
+  padding: 16px; width: min(640px, calc(100vw - 32px)); max-width: none;
+}
+.picker::backdrop { background: rgba(0, 0, 0, 0.55); }
+.picker-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.picker-head h2 { margin: 0; font-size: 1.05rem; }
+.picker-head button { font-size: 1.2rem; line-height: 1; padding: 4px 10px; }
+.picker-grid { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 4px; }
+.picker-grid .pick { padding: 0; background: none; border: 0; border-radius: 5px; min-width: 0; }
+.picker-grid .pick .card.small {
+  width: 100%; height: auto; aspect-ratio: 5 / 7; flex-direction: column; justify-content: center; padding: 0; border-radius: 5px;
+}
+.picker-grid .pick .card.small .rank { font-size: clamp(0.7rem, 2.6vw, 1rem); }
+.picker-grid .pick .card.small .pip { font-size: clamp(0.65rem, 2.4vw, 0.95rem); }
+.picker-grid .pick:hover:not(:disabled) { background: none; transform: translateY(-2px); }
+.picker-grid .pick:disabled { opacity: 0.2; }
+.picker-grid .pick.current .card { outline: 3px solid var(--accent); outline-offset: 1px; }
+.picker-foot { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 .card.small { width: auto; height: auto; flex-direction: row; padding: 1px 4px; gap: 1px; box-shadow: none; border-radius: 4px; }
 .card.small .rank, .card.small .pip { font-size: 0.9rem; margin: 0; }
 .suit-s { color: var(--suit-s); }

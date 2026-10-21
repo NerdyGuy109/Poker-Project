@@ -6,23 +6,25 @@
   const DEFAULT_ON = new Set(['straight-flush', 'quads', 'full-house', 'flush', 'straight', 'set', 'trips', 'two-pair', 'overpair', 'top-pair']);
 
   const state = {
-    flop: [],
+    flop: [null, null, null],
     turn: null,
     river: null,
     analysis: null,
     selectedCell: null,
     drawsFirst: false,
     highlight: {}, // category id -> { on, color }
+    texture: { suits: 'any', pairing: 'any' },
+    pickerSlot: null, // 'flop-0' | 'flop-1' | 'flop-2' | 'turn' | 'river' while the card picker is open
   };
 
   const $ = (id) => document.getElementById(id);
   const catById = Object.fromEntries(P.CATEGORIES.map((c) => [c.id, c]));
 
   // ---------------------------------------------------------------------------
-  // Highlight settings (remembered per browser)
+  // Settings (remembered per browser)
   // ---------------------------------------------------------------------------
 
-  function loadHighlights() {
+  function loadSettings() {
     let saved = {};
     try {
       saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
@@ -35,11 +37,13 @@
       };
     }
     state.drawsFirst = !!saved.drawsFirst;
+    const t = saved.texture || {};
+    if (P.textureIsPossible(t.suits, t.pairing)) state.texture = { suits: t.suits || 'any', pairing: t.pairing || 'any' };
   }
 
-  function saveHighlights() {
+  function saveSettings() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ highlight: state.highlight, drawsFirst: state.drawsFirst }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ highlight: state.highlight, drawsFirst: state.drawsFirst, texture: state.texture }));
     } catch (e) { /* storage unavailable */ }
   }
 
@@ -54,17 +58,30 @@
   // Board
   // ---------------------------------------------------------------------------
 
-  const boardCards = () => state.flop.concat(state.turn === null ? [] : [state.turn], state.river === null ? [] : [state.river]);
+  const flopComplete = () => state.flop.every((c) => c !== null);
+
+  // All cards currently on the board, in order (a partly chosen flop skips its empty slots).
+  const boardCards = () => state.flop.filter((c) => c !== null).concat(
+    state.turn === null ? [] : [state.turn],
+    state.river === null ? [] : [state.river]);
 
   function newFlop() {
-    state.flop = P.drawCards(3);
+    // The turn and river belong to the old hand, so they go too.
+    state.flop = P.drawFlop(state.texture);
+    state.turn = null;
+    state.river = null;
+    update();
+  }
+
+  function clearFlop() {
+    state.flop = [null, null, null];
     state.turn = null;
     state.river = null;
     update();
   }
 
   function newTurn() {
-    if (state.flop.length !== 3) return;
+    if (!flopComplete()) return;
     state.turn = P.drawCards(1, state.flop.concat(state.river === null ? [] : [state.river]))[0];
     update();
   }
@@ -86,6 +103,42 @@
     update();
   }
 
+  function slotCard(slot) {
+    if (slot.startsWith('flop-')) return state.flop[+slot.slice(5)];
+    return state[slot];
+  }
+
+  function setSlot(slot, card) {
+    if (slot.startsWith('flop-')) {
+      state.flop[+slot.slice(5)] = card;
+      // Swapping a flop card keeps the turn and river so you can compare; removing one starts over.
+      if (card === null) {
+        state.turn = null;
+        state.river = null;
+      }
+    } else if (slot === 'turn') {
+      state.turn = card;
+      if (card === null) state.river = null;
+    } else {
+      state.river = card;
+    }
+    update();
+  }
+
+  function setBoardFromText(text) {
+    let cards;
+    try {
+      cards = P.parseBoard(text);
+    } catch (e) {
+      $('board-error').textContent = e.message;
+      return;
+    }
+    state.flop = cards.slice(0, 3);
+    state.turn = cards.length > 3 ? cards[3] : null;
+    state.river = cards.length > 4 ? cards[4] : null;
+    update();
+  }
+
   function cardHTML(c, small) {
     const suit = P.SUITS[P.suitOf(c)];
     const rank = P.RANKS[P.rankOf(c)];
@@ -95,24 +148,80 @@
       '<span class="pip">' + P.SUIT_SYMBOLS[suit] + '</span></span>';
   }
 
-  const emptySlot = '<span class="card empty" aria-label="empty"></span>';
+  const SLOT_NAMES = { 'flop-0': 'first flop card', 'flop-1': 'second flop card', 'flop-2': 'third flop card', turn: 'turn', river: 'river' };
+
+  function slotHTML(slot, card, disabled) {
+    const label = (card === null ? 'Choose the ' : 'Change the ') + SLOT_NAMES[slot];
+    return '<button type="button" class="slot" data-slot="' + slot + '" aria-label="' + label + '" title="' + label + '"' +
+      (disabled ? ' disabled' : '') + '>' +
+      (card === null ? '<span class="card empty"><span class="plus">+</span></span>' : cardHTML(card)) + '</button>';
+  }
 
   function renderBoard() {
-    $('flop-cards').innerHTML = state.flop.length ? state.flop.map((c) => cardHTML(c)).join('') : emptySlot.repeat(3);
-    $('turn-cards').innerHTML = state.turn === null ? emptySlot : cardHTML(state.turn);
-    $('river-cards').innerHTML = state.river === null ? emptySlot : cardHTML(state.river);
+    $('flop-cards').innerHTML = state.flop.map((c, i) => slotHTML('flop-' + i, c, false)).join('');
+    $('turn-cards').innerHTML = slotHTML('turn', state.turn, !flopComplete());
+    $('river-cards').innerHTML = slotHTML('river', state.river, state.turn === null);
 
-    $('new-turn').disabled = state.flop.length !== 3;
+    $('clear-flop').disabled = boardCards().length === 0;
+    $('new-turn').disabled = !flopComplete();
     $('clear-turn').disabled = state.turn === null;
     $('new-river').disabled = state.turn === null;
     $('clear-river').disabled = state.river === null;
 
-    const street = state.river !== null ? 'River' : state.turn !== null ? 'Turn' : 'Flop';
+    $('flop-suits').value = state.texture.suits;
+    $('flop-pairing').value = state.texture.pairing;
+    for (const opt of $('flop-suits').options) opt.disabled = !P.textureIsPossible(opt.value, state.texture.pairing);
+    for (const opt of $('flop-pairing').options) opt.disabled = !P.textureIsPossible(state.texture.suits, opt.value);
+
     const a = state.analysis;
-    $('summary').innerHTML = a
-      ? '<strong>' + street + '</strong> &middot; ' + a.total.toLocaleString() + ' possible hole-card combos ' +
-        '<span class="muted">(' + (52 - boardCards().length) + ' unseen cards)</span>'
-      : '';
+    if (!a) {
+      $('summary').innerHTML = 'Pick all three flop cards, or deal a new flop, to see the analysis.';
+      return;
+    }
+    const street = state.river !== null ? 'River' : state.turn !== null ? 'Turn' : 'Flop';
+    const t = P.flopTexture(state.flop);
+    const textureText = { monotone: 'Monotone', 'two-tone': 'Two-tone', rainbow: 'Rainbow' }[t.suits] +
+      (t.pairing === 'unpaired' ? '' : t.pairing === 'paired' ? ', paired' : ', trips');
+    $('summary').innerHTML = '<strong>' + street + '</strong> &middot; ' + textureText + ' flop &middot; ' +
+      a.total.toLocaleString() + ' possible hole-card combos ' +
+      '<span class="muted">(' + (52 - boardCards().length) + ' unseen cards)</span>';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Card picker
+  // ---------------------------------------------------------------------------
+
+  function openPicker(slot) {
+    state.pickerSlot = slot;
+    const current = slotCard(slot);
+    const dead = new Set(boardCards().filter((c) => c !== current));
+    $('picker-title').textContent = (current === null ? 'Choose the ' : 'Change the ') + SLOT_NAMES[slot];
+
+    const html = [];
+    for (const suit of [0, 1, 2, 3]) {
+      for (let rank = 12; rank >= 0; rank--) {
+        const c = P.makeCard(rank, suit);
+        const used = dead.has(c);
+        html.push('<button type="button" class="pick' + (c === current ? ' current' : '') + '" data-card="' + c + '"' +
+          (used ? ' disabled title="Already on the board"' : '') + ' aria-label="' + P.cardToString(c) + '">' +
+          cardHTML(c, true) + '</button>');
+      }
+    }
+    $('picker-grid').innerHTML = html.join('');
+    $('picker-remove').disabled = current === null;
+    $('picker').showModal();
+  }
+
+  function pickCard(card) {
+    const slot = state.pickerSlot;
+    $('picker').close();
+    if (slot) setSlot(slot, card);
+  }
+
+  function pickRandom() {
+    const current = slotCard(state.pickerSlot);
+    const exclude = boardCards().concat(current === null ? [] : [current]);
+    pickCard(P.drawCards(1, exclude)[0]);
   }
 
   // ---------------------------------------------------------------------------
@@ -155,7 +264,10 @@
 
   function renderHighlightTotal() {
     const a = state.analysis;
-    if (!a) return;
+    if (!a) {
+      $('highlight-total').innerHTML = '';
+      return;
+    }
     const on = new Set(Object.keys(state.highlight).filter((id) => state.highlight[id].on));
     const n = a.combos.filter((c) => c.categories.some((id) => on.has(id))).length;
     $('highlight-total').innerHTML = 'Highlighted: <strong>' + n + '</strong> of ' + a.total + ' combos <span class="muted">(' + pct(n, a.total) + ')</span>';
@@ -189,6 +301,11 @@
   }
 
   function renderGrid() {
+    if (!state.analysis) {
+      $('hand-grid').innerHTML = '<p class="grid-empty">The grid fills in once the flop is complete.</p>';
+      $('cell-detail').innerHTML = '';
+      return;
+    }
     const order = priorityOrder();
     const cells = cellsFromAnalysis();
     const html = [];
@@ -259,14 +376,16 @@
   // ---------------------------------------------------------------------------
 
   function update() {
-    state.analysis = P.analyzeBoard(boardCards());
+    state.analysis = flopComplete() ? P.analyzeBoard(boardCards()) : null;
+    $('board-text').value = boardCards().map(P.cardToString).join(' ');
+    $('board-error').textContent = '';
     renderBoard();
     renderCategories();
     renderGrid();
   }
 
   function refreshHighlights() {
-    saveHighlights();
+    saveSettings();
     renderCategories();
     renderGrid();
   }
@@ -278,15 +397,45 @@
 
   function bind() {
     $('new-flop').addEventListener('click', newFlop);
+    $('clear-flop').addEventListener('click', clearFlop);
     $('new-turn').addEventListener('click', newTurn);
     $('clear-turn').addEventListener('click', clearTurn);
     $('new-river').addEventListener('click', newRiver);
     $('clear-river').addEventListener('click', clearRiver);
 
+    for (const id of ['flop-suits', 'flop-pairing']) {
+      $(id).addEventListener('change', () => {
+        state.texture = { suits: $('flop-suits').value, pairing: $('flop-pairing').value };
+        saveSettings();
+        renderBoard();
+      });
+    }
+
+    $('board-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      setBoardFromText($('board-text').value);
+    });
+
+    document.querySelector('.board').addEventListener('click', (e) => {
+      const slot = e.target.closest('[data-slot]');
+      if (slot && !slot.disabled) openPicker(slot.dataset.slot);
+    });
+    $('picker-grid').addEventListener('click', (e) => {
+      const pick = e.target.closest('[data-card]');
+      if (pick && !pick.disabled) pickCard(+pick.dataset.card);
+    });
+    $('picker-random').addEventListener('click', pickRandom);
+    $('picker-remove').addEventListener('click', () => pickCard(null));
+    $('picker-close').addEventListener('click', () => $('picker').close());
+    // Clicking the dimmed backdrop closes the picker.
+    $('picker').addEventListener('click', (e) => {
+      if (e.target === $('picker')) $('picker').close();
+    });
+
     $('draws-first').checked = state.drawsFirst;
     $('draws-first').addEventListener('change', (e) => {
       state.drawsFirst = e.target.checked;
-      saveHighlights();
+      saveSettings();
       renderGrid();
     });
 
@@ -303,7 +452,7 @@
       const t = e.target;
       if (t.dataset.color) {
         state.highlight[t.dataset.color].color = t.value;
-        saveHighlights();
+        saveSettings();
         renderGrid();
       }
     });
@@ -331,7 +480,7 @@
     });
   }
 
-  loadHighlights();
+  loadSettings();
   bind();
   newFlop();
 })();

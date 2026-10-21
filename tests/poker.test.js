@@ -80,3 +80,44 @@ test('drawCards never returns excluded or duplicate cards', () => {
     for (const c of drawn) assert.ok(!exclude.includes(c));
   }
 });
+
+test('parseBoard accepts common ways of typing cards', () => {
+  const expected = cards('As Kd 7c');
+  assert.deepEqual(P.parseBoard('As Kd 7c'), expected);
+  assert.deepEqual(P.parseBoard('askd7C'), expected);
+  assert.deepEqual(P.parseBoard('A♠, K♦, 7♣'), expected);
+  assert.deepEqual(P.parseBoard('10h 9h 2c Td'), cards('Th 9h 2c Td'));
+  assert.throws(() => P.parseBoard('As Kd'), /3 to 5/);
+  assert.throws(() => P.parseBoard('As Kd 7c 2h 3h 4h'), /3 to 5/);
+  assert.throws(() => P.parseBoard('As As 7c'), /twice/);
+  assert.throws(() => P.parseBoard('As Kx 7c'), /Couldn/);
+});
+
+test('flopTexture describes suits and pairing', () => {
+  assert.deepEqual(P.flopTexture(cards('As Ks 7s')), { suits: 'monotone', pairing: 'unpaired' });
+  assert.deepEqual(P.flopTexture(cards('As Ks 7d')), { suits: 'two-tone', pairing: 'unpaired' });
+  assert.deepEqual(P.flopTexture(cards('As Kh 7d')), { suits: 'rainbow', pairing: 'unpaired' });
+  assert.deepEqual(P.flopTexture(cards('As Ah 7s')), { suits: 'two-tone', pairing: 'paired' });
+  assert.deepEqual(P.flopTexture(cards('As Ah Ad')), { suits: 'rainbow', pairing: 'trips' });
+});
+
+test('drawFlop deals the requested texture, or null when impossible', () => {
+  const suitsOpts = ['any', 'monotone', 'two-tone', 'rainbow'];
+  const pairingOpts = ['any', 'unpaired', 'paired', 'trips'];
+  for (const suits of suitsOpts) {
+    for (const pairing of pairingOpts) {
+      const possible = P.textureIsPossible(suits, pairing);
+      for (let i = 0; i < 25; i++) {
+        const flop = P.drawFlop({ suits, pairing });
+        if (!possible) { assert.equal(flop, null); break; }
+        assert.equal(new Set(flop).size, 3);
+        const t = P.flopTexture(flop);
+        if (suits !== 'any') assert.equal(t.suits, suits);
+        if (pairing !== 'any') assert.equal(t.pairing, pairing);
+      }
+    }
+  }
+  assert.equal(P.textureIsPossible('monotone', 'paired'), false);
+  assert.equal(P.textureIsPossible('two-tone', 'trips'), false);
+  assert.equal(P.textureIsPossible('rainbow', 'trips'), true);
+});

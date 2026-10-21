@@ -21,6 +21,7 @@
           <div class="street-label">Flop</div>
           <div class="street-buttons">
             <button type="button" id="new-flop" class="primary">New flop</button>
+            <button type="button" id="clear-flop" class="ghost">Clear</button>
           </div>
         </div>
         <div class="street">
@@ -40,7 +41,37 @@
           </div>
         </div>
       </div>
+      <div class="board-controls">
+        <fieldset class="texture">
+          <legend>New flop texture</legend>
+          <label>Suits
+            <select id="flop-suits">
+              <option value="any">Any</option>
+              <option value="monotone">Monotone</option>
+              <option value="two-tone">Two-tone</option>
+              <option value="rainbow">Rainbow</option>
+            </select>
+          </label>
+          <label>Pairing
+            <select id="flop-pairing">
+              <option value="any">Any</option>
+              <option value="unpaired">Unpaired</option>
+              <option value="paired">Paired</option>
+              <option value="trips">Trips</option>
+            </select>
+          </label>
+        </fieldset>
+        <form class="board-input" id="board-form" novalidate>
+          <label for="board-text">Type a board</label>
+          <div class="board-input-row">
+            <input id="board-text" type="text" placeholder="e.g. As Kd 7c 2h" autocomplete="off" spellcheck="false" autocapitalize="off">
+            <button type="submit">Set</button>
+          </div>
+        </form>
+      </div>
+      <p class="board-error" id="board-error" role="alert"></p>
       <div class="summary" id="summary" aria-live="polite"></div>
+      <p class="board-hint">Tip: click any card on the board to choose it yourself.</p>
     </section>
 
     <div class="layout">
@@ -68,6 +99,18 @@
       </section>
     </div>
   </main>
+
+  <dialog id="picker" class="picker" aria-labelledby="picker-title">
+    <div class="picker-head">
+      <h2 id="picker-title">Choose a card</h2>
+      <button type="button" id="picker-close" class="ghost" aria-label="Close">&times;</button>
+    </div>
+    <div class="picker-grid" id="picker-grid"></div>
+    <div class="picker-foot">
+      <button type="button" id="picker-random">Random card</button>
+      <button type="button" id="picker-remove" class="ghost">Remove card</button>
+    </div>
+  </dialog>
 
   <script src="js/poker.js"></script>
   <script src="js/app.js"></script>

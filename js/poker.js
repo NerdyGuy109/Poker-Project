@@ -43,6 +43,58 @@
     return out;
   }
 
+  // Parses a board typed by a person: "As Kd 7c", "AsKd7c", "10h 9h 2c", "A♠ K♦ 7♣" all work.
+  // Throws an Error with a readable message if the text isn't 3-5 distinct cards.
+  function parseBoard(text) {
+    const symbols = { '♠': 's', '♥': 'h', '♦': 'd', '♣': 'c' };
+    const normalized = text.replace(/[♠♥♦♣]/g, (m) => symbols[m]).replace(/10/g, 'T');
+    const tokens = normalized.match(/[2-9tjqka][shdc]/gi) || [];
+    const leftover = normalized.replace(/[2-9tjqka][shdc]/gi, '').replace(/[\s,]+/g, '');
+    if (leftover) throw new Error('Couldn’t read "' + leftover + '". Use cards like As, Kd, 7c or 10h.');
+    if (tokens.length < 3 || tokens.length > 5) throw new Error('Enter 3 to 5 cards (flop, plus an optional turn and river).');
+    const cards = tokens.map(parseCard);
+    if (new Set(cards).size !== cards.length) throw new Error('The same card appears twice.');
+    return cards;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Flop textures
+  // ---------------------------------------------------------------------------
+
+  // suits: 'monotone' | 'two-tone' | 'rainbow'; pairing: 'unpaired' | 'paired' | 'trips'
+  function flopTexture(flop) {
+    const suitCount = new Set(flop.map(suitOf)).size;
+    const rankCount = new Set(flop.map(rankOf)).size;
+    return {
+      suits: suitCount === 1 ? 'monotone' : suitCount === 2 ? 'two-tone' : 'rainbow',
+      pairing: rankCount === 3 ? 'unpaired' : rankCount === 2 ? 'paired' : 'trips',
+    };
+  }
+
+  // Cards of the same rank always have different suits, so some combinations can't exist.
+  function textureIsPossible(suits, pairing) {
+    suits = suits || 'any';
+    pairing = pairing || 'any';
+    if (suits === 'monotone') return pairing === 'any' || pairing === 'unpaired';
+    if (suits === 'two-tone') return pairing !== 'trips';
+    return true;
+  }
+
+  // Deals a random flop matching { suits, pairing } (either may be 'any' or omitted).
+  // Returns null if the texture is impossible.
+  function drawFlop(texture, exclude, rng) {
+    const suits = (texture && texture.suits) || 'any';
+    const pairing = (texture && texture.pairing) || 'any';
+    if (!textureIsPossible(suits, pairing)) return null;
+    // Rejection sampling: even the rarest texture (trips, ~0.2%) takes a few hundred draws at most.
+    for (let i = 0; i < 100000; i++) {
+      const flop = drawCards(3, exclude, rng);
+      const t = flopTexture(flop);
+      if ((suits === 'any' || t.suits === suits) && (pairing === 'any' || t.pairing === pairing)) return flop;
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------------------
   // Hand evaluation
   // ---------------------------------------------------------------------------
@@ -319,6 +371,10 @@
     parseCard,
     parseCards,
     drawCards,
+    parseBoard,
+    flopTexture,
+    textureIsPossible,
+    drawFlop,
     straightHigh,
     evaluate,
     classify,
