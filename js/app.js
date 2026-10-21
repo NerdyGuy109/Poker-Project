@@ -32,6 +32,8 @@
     nlhe: 'Two hole cards; your best five cards can use one, both or neither of them.',
     plo: 'Four hole cards; every hand must use exactly two of them with three board cards.',
     plo8: 'Four hole cards, exactly two used for each half. The pot splits between the best high and the best low (five different cards 8 or lower, aces low).',
+    plo5: 'Five hole cards; every hand must still use exactly two of them with three board cards.',
+    bigo: 'Five hole cards, exactly two used for each half. Split pot like PLO8: best high and best low (five different cards 8 or lower, aces low).',
   };
 
   // ---------------------------------------------------------------------------
@@ -199,7 +201,7 @@
     const textureText = { monotone: 'Monotone', 'two-tone': 'Two-tone', rainbow: 'Rainbow' }[t.suits] +
       (t.pairing === 'unpaired' ? '' : t.pairing === 'paired' ? ', paired' : ', trips');
     $('summary').innerHTML = '<strong>' + street + '</strong> &middot; ' + textureText + ' flop &middot; ' +
-      a.total.toLocaleString() + (isOmaha() ? ' possible 4-card hands ' : ' possible hole-card combos ') +
+      a.total.toLocaleString() + (isOmaha() ? ' possible ' + game().holeCards + '-card hands ' : ' possible hole-card combos ') +
       '<span class="muted">(' + (52 - boardCards().length) + ' unseen cards)</span>';
   }
 
@@ -511,7 +513,8 @@
     let hand;
     try {
       hand = P.parseCardList(text);
-      if (hand.length !== 4) throw new Error('Enter exactly 4 cards.');
+      const need = game().holeCards;
+      if (hand.length !== need) throw new Error('Enter exactly ' + need + ' cards.');
       const onBoard = hand.filter((c) => boardCards().includes(c));
       if (onBoard.length) throw new Error(onBoard.map(P.cardToString).join(', ') + ' is already on the board.');
     } catch (e) {
@@ -540,6 +543,7 @@
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
     }
     $('game-note').textContent = GAME_NOTES[state.game];
+    $('check-text').placeholder = game().holeCards === 5 ? 'e.g. As Ks Qd Jd 9c' : 'e.g. As Ks Qd Jd';
     $('grid-panel').hidden = isOmaha();
     $('omaha-panel').hidden = !isOmaha();
     const lowOpt = $('color-priority').querySelector('option[value="low"]');
@@ -551,10 +555,30 @@
   // Wiring
   // ---------------------------------------------------------------------------
 
+  let updateToken = 0;
+
   function update() {
-    state.analysis = flopComplete() ? P.analyzeBoard(boardCards(), state.game) : null;
     $('board-text').value = boardCards().map(P.cardToString).join(' ');
     $('board-error').textContent = '';
+    const token = ++updateToken;
+    // 5-card Omaha means ~2 million hands: show the new board first, then count.
+    if (flopComplete() && game().holeCards >= 5) {
+      state.analysis = null;
+      renderGame();
+      renderBoard();
+      $('summary').innerHTML = 'Counting every ' + game().holeCards + '-card hand&hellip;';
+      document.body.classList.add('busy');
+      requestAnimationFrame(() => setTimeout(() => {
+        if (token === updateToken) finishUpdate();
+      }, 0));
+      return;
+    }
+    finishUpdate();
+  }
+
+  function finishUpdate() {
+    state.analysis = flopComplete() ? P.analyzeBoard(boardCards(), state.game) : null;
+    document.body.classList.remove('busy');
     renderGame();
     renderBoard();
     renderCategories();

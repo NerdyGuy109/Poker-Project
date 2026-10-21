@@ -179,3 +179,29 @@ test('analyzeBoard counts every Omaha hand once', () => {
   assert.ok(river.counts['any-low'] >= river.counts['nut-low'] && river.counts['nut-low'] > 0);
   assert.equal(river.counts['low-draw'], 0);
 });
+
+test('5-card Omaha (PLO5 and Big O) still uses exactly two hole cards', () => {
+  // Three hearts in hand plus two on board: only two hole cards play, so no flush.
+  assert.deepEqual(omaha('Ah Kh Qh 7c 2d', '9h 8h 3s Js 4c', 'plo5').categories, ['ace-high']);
+  assert.ok(omaha('Ah Kh Qc 7c 2d', '9h 8h 3h Js 4c', 'plo5').categories.includes('flush'));
+  // Big O lows need two hole cards too.
+  const r = omaha('Ac 3d Ks Qh Jh', '2c 5d 8h Kc 9s', 'bigo');
+  assert.equal(P.lowToString(r.low), '8-5-3-2-A low');
+  assert.ok(r.categories.includes('nut-low'));
+  assert.ok(!omaha('Ac 3d Ks Qh Jh', '2c 5d 8h Kc 9s', 'plo5').categories.includes('any-low'));
+});
+
+test('analyzeBoard counts every 5-card hand once and can rebuild any hand', () => {
+  const a = P.analyzeBoard(cards('9h 8h 2c'), 'bigo');
+  assert.equal(a.total, 1906884);
+  const madeTotal = P.GAMES.bigo.categoryIds.filter((id) => P.CATEGORIES.find((c) => c.id === id).group === 'made')
+    .reduce((n, id) => n + a.counts[id], 0);
+  assert.equal(madeTotal, 1906884);
+  for (const i of [0, 1, 777777, 1906883]) {
+    const hand = a.cardsOf(i);
+    assert.equal(new Set(hand).size, 5);
+    assert.deepEqual(a.categoriesOf(i), omaha(hand.map(P.cardToString).join(' '), '9h 8h 2c', 'bigo').categories);
+  }
+  // Lexicographic order: the first hand is the five highest live cards.
+  assert.deepEqual(a.cardsOf(0).map(P.cardToString), ['Ac', 'Ad', 'Ah', 'As', 'Kc']);
+});

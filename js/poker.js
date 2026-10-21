@@ -259,6 +259,23 @@
       categoryIds: MADE_IDS.concat(['combo-draw', 'flush-draw', 'nut-flush-draw', 'wrap', 'oesd', 'gutshot', 'backdoor-flush-draw', 'nut-low', 'any-low', 'low-draw']),
       names: { oesd: 'Open-ended (5–8 straight outs)', gutshot: 'Gutshot (1–4 straight outs)' },
     },
+    plo5: {
+      id: 'plo5',
+      name: '5-card PLO',
+      short: 'PLO5',
+      holeCards: 5,
+      categoryIds: MADE_IDS.concat(['combo-draw', 'flush-draw', 'nut-flush-draw', 'wrap', 'oesd', 'gutshot', 'backdoor-flush-draw']),
+      names: { oesd: 'Open-ended (5\u20138 straight outs)', gutshot: 'Gutshot (1\u20134 straight outs)' },
+    },
+    bigo: {
+      id: 'bigo',
+      name: 'Big O (5-card PLO hi-lo)',
+      short: 'Big O',
+      holeCards: 5,
+      hiLo: true,
+      categoryIds: MADE_IDS.concat(['combo-draw', 'flush-draw', 'nut-flush-draw', 'wrap', 'oesd', 'gutshot', 'backdoor-flush-draw', 'nut-low', 'any-low', 'low-draw']),
+      names: { oesd: 'Open-ended (5\u20138 straight outs)', gutshot: 'Gutshot (1\u20134 straight outs)' },
+    },
   };
 
   function categoryName(id, gameId) {
@@ -474,7 +491,6 @@
 
     const table = {
       made: new Uint8Array(2704),
-      score: new Float64Array(2704),
       straightOuts: new Uint16Array(2704),
       low: new Int32Array(2704),
       lowOuts: new Uint16Array(2704),
@@ -492,7 +508,6 @@
         if (lv < low) low = lv;
       }
       table.made[idx] = madeIndex[madeCategory(hole, board, best)];
-      table.score[idx] = best.score;
       table.low[idx] = low;
 
       if (drawsPossible) {
@@ -572,69 +587,106 @@
     return best;
   }
 
-  const PAIR_SLOTS = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
+  function binomial(n, k) {
+    if (k < 0 || k > n) return 0;
+    let r = 1;
+    for (let i = 1; i <= k; i++) r = r * (n - k + i) / i;
+    return Math.round(r);
+  }
 
-  // Combines the six pairs of a 4-card hand (cards sorted high to low). Returns { made, flags, score, low }.
-  function combineOmaha(table, cards, ctx) {
-    let made = 255;
-    let score = -1;
-    let low = NO_LOW;
-    let straightOuts = 0;
-    let lowOuts = 0;
-    for (const [i, j] of PAIR_SLOTS) {
-      const idx = cards[i] * 52 + cards[j];
-      if (table.made[idx] < made) made = table.made[idx];
-      if (table.score[idx] > score) score = table.score[idx];
-      if (table.low[idx] < low) low = table.low[idx];
-      straightOuts |= table.straightOuts[idx];
-      lowOuts |= table.lowOuts[idx];
+  // Walks every k-card hand from `live` (sorted high to low) in lexicographic order and calls
+  // onHand(made, flags) for each. Pair results are folded in as each card is added, so the
+  // innermost level only looks up the new card's pairs.
+  function enumerateOmaha(live, k, table, ctx, onHand) {
+    const n = live.length;
+    const bit = ctx.bit;
+    const cards = new Array(k);
+    const aggMade = new Uint8Array(k + 1);
+    const aggLow = new Int32Array(k + 1);
+    const aggStraight = new Uint16Array(k + 1);
+    const aggLowOuts = new Uint16Array(k + 1);
+    const handSuit = new Uint8Array(4);
+    const handRankCount = new Uint8Array(13);
+    const inHand = new Uint8Array(52);
+    aggMade[0] = 255;
+    aggLow[0] = NO_LOW;
+
+    function finish(made, low, straightOuts, lowOuts) {
+      let flags = 0;
+      if (ctx.street < 5) {
+        let flushDraw = false;
+        for (let s = 0; s < 4; s++) {
+          if (handSuit[s] < 2) continue;
+          if (ctx.boardSuit[s] === 2) {
+            flushDraw = true;
+            flags |= bit['flush-draw'];
+            if (inHand[makeCard(ctx.nutRank[s], s)]) flags |= bit['nut-flush-draw'];
+          } else if (ctx.boardSuit[s] === 1 && ctx.street === 3) {
+            flags |= bit['backdoor-flush-draw'];
+          }
+        }
+
+        let straightDraw = false;
+        if (made > ctx.straightIdx && straightOuts) {
+          let outs = 0;
+          for (let r = 0; r < 13; r++) {
+            if (straightOuts & (1 << r)) outs += 4 - ctx.boardRankCount[r] - handRankCount[r];
+          }
+          if (outs >= 9) flags |= bit.wrap;
+          else if (outs >= 5) flags |= bit.oesd;
+          else if (outs >= 1) flags |= bit.gutshot;
+          straightDraw = outs > 0;
+        }
+        if (flushDraw && straightDraw) flags |= bit['combo-draw'];
+
+        if (ctx.game.hiLo && low === NO_LOW && lowOuts) flags |= bit['low-draw'];
+      }
+      if (ctx.game.hiLo && low !== NO_LOW) {
+        flags |= bit['any-low'];
+        if (low === ctx.nutLow) flags |= bit['nut-low'];
+      }
+      onHand(made, flags, low);
     }
 
-    let flags = 0;
-    const bit = ctx.bit;
-    if (ctx.street < 5) {
-      const handSuit = [0, 0, 0, 0];
-      const handRankCount = new Array(13).fill(0);
-      for (const c of cards) {
+    function walk(start, depth) {
+      const last = n - (k - depth);
+      for (let i = start; i <= last; i++) {
+        const c = live[i];
+        cards[depth] = c;
+        let made = aggMade[depth];
+        let low = aggLow[depth];
+        let straightOuts = aggStraight[depth];
+        let lowOuts = aggLowOuts[depth];
+        for (let j = 0; j < depth; j++) {
+          const idx = cards[j] * 52 + c; // cards[j] > c because live is sorted high to low
+          if (table.made[idx] < made) made = table.made[idx];
+          if (table.low[idx] < low) low = table.low[idx];
+          straightOuts |= table.straightOuts[idx];
+          lowOuts |= table.lowOuts[idx];
+        }
         handSuit[suitOf(c)]++;
         handRankCount[rankOf(c)]++;
-      }
-      let flushDraw = false;
-      for (let s = 0; s < 4; s++) {
-        if (handSuit[s] < 2) continue;
-        if (ctx.boardSuit[s] === 2) {
-          flushDraw = true;
-          flags |= bit['flush-draw'];
-          if (cards.includes(makeCard(ctx.nutRank[s], s))) flags |= bit['nut-flush-draw'];
-        } else if (ctx.boardSuit[s] === 1 && ctx.street === 3) {
-          flags |= bit['backdoor-flush-draw'];
+        inHand[c] = 1;
+        if (depth + 1 === k) {
+          finish(made, low, straightOuts, lowOuts);
+        } else {
+          aggMade[depth + 1] = made;
+          aggLow[depth + 1] = low;
+          aggStraight[depth + 1] = straightOuts;
+          aggLowOuts[depth + 1] = lowOuts;
+          walk(i + 1, depth + 1);
         }
+        handSuit[suitOf(c)]--;
+        handRankCount[rankOf(c)]--;
+        inHand[c] = 0;
       }
-
-      let straightDraw = false;
-      if (made > ctx.straightIdx && straightOuts) {
-        let outs = 0;
-        for (let r = 0; r < 13; r++) {
-          if (straightOuts & (1 << r)) outs += 4 - ctx.boardRankCount[r] - handRankCount[r];
-        }
-        if (outs >= 9) flags |= bit.wrap;
-        else if (outs >= 5) flags |= bit.oesd;
-        else if (outs >= 1) flags |= bit.gutshot;
-        straightDraw = outs > 0;
-      }
-      if (flushDraw && straightDraw) flags |= bit['combo-draw'];
-
-      if (ctx.game.hiLo && low === NO_LOW && lowOuts) flags |= bit['low-draw'];
     }
-    if (ctx.game.hiLo && low !== NO_LOW) {
-      flags |= bit['any-low'];
-      if (low === ctx.nutLow) flags |= bit['nut-low'];
-    }
-    return { made, flags, score, low };
+    walk(0, 0);
   }
 
   function analyzeOmaha(board, gameId) {
     const ctx = omahaContext(board, gameId);
+    const k = ctx.game.holeCards;
     const dead = new Set(board);
     const live = [];
     for (let c = 51; c >= 0; c--) if (!dead.has(c)) live.push(c);
@@ -644,65 +696,67 @@
     const table = buildPairTable(board, pairs);
 
     const n = live.length;
-    const total = n * (n - 1) * (n - 2) * (n - 3) / 24;
-    const hands = new Uint8Array(total * 4);
+    const total = binomial(n, k);
+    // Hands aren't stored (5-card Omaha has ~1.9 million); hand i is rebuilt from its index.
     const made = new Uint8Array(total);
-    const flags = new Uint32Array(total);
+    const flags = new Uint16Array(total);
     const madeCounts = new Array(MADE_IDS.length).fill(0);
     const flagCounts = new Array(ctx.flagIds.length).fill(0);
-    const cards = [0, 0, 0, 0];
 
-    let k = 0;
-    for (let a = 0; a < n; a++) {
-      cards[0] = live[a];
-      for (let b = a + 1; b < n; b++) {
-        cards[1] = live[b];
-        for (let c = b + 1; c < n; c++) {
-          cards[2] = live[c];
-          for (let d = c + 1; d < n; d++) {
-            cards[3] = live[d];
-            const res = combineOmaha(table, cards, ctx);
-            hands[k * 4] = cards[0];
-            hands[k * 4 + 1] = cards[1];
-            hands[k * 4 + 2] = cards[2];
-            hands[k * 4 + 3] = cards[3];
-            made[k] = res.made;
-            flags[k] = res.flags;
-            madeCounts[res.made]++;
-            for (let f = res.flags, i = 0; f; f >>>= 1, i++) if (f & 1) flagCounts[i]++;
-            k++;
-          }
-        }
-      }
-    }
+    let idx = 0;
+    enumerateOmaha(live, k, table, ctx, (m, f) => {
+      made[idx] = m;
+      flags[idx] = f;
+      madeCounts[m]++;
+      for (let b = 0; f; f >>>= 1, b++) if (f & 1) flagCounts[b]++;
+      idx++;
+    });
 
     const counts = {};
     for (const cat of CATEGORIES) counts[cat.id] = 0;
     MADE_IDS.forEach((id, i) => { counts[id] = madeCounts[i]; });
     ctx.flagIds.forEach((id, i) => { counts[id] = flagCounts[i]; });
 
+    // Inverse of the lexicographic enumeration order.
+    function cardsOf(i) {
+      const out = [];
+      let x = 0;
+      for (let slot = 0; slot < k; slot++) {
+        for (;;) {
+          const below = binomial(n - x - 1, k - slot - 1);
+          if (i < below) break;
+          i -= below;
+          x++;
+        }
+        out.push(live[x]);
+        x++;
+      }
+      return out;
+    }
+
     return {
       game: gameId,
+      holeCards: k,
       total,
       counts,
-      hands,
       made,
       flags,
       madeIds: MADE_IDS,
       flagIds: ctx.flagIds,
       nutLow: ctx.nutLow,
-      cardsOf: (i) => Array.from(hands.subarray(i * 4, i * 4 + 4)),
+      cardsOf,
       categoriesOf: (i) => [MADE_IDS[made[i]]].concat(ctx.flagIds.filter((id, b) => flags[i] & (1 << b))),
     };
   }
 
-  // Classifies one Omaha hand (4 cards) on a board. Returns { categories, high, low }.
+  // Classifies one Omaha hand (4 or 5 cards) on a board. Returns { categories, high, low, isNutLow }.
   function classifyOmaha(hand, board, gameId) {
     const cards = hand.slice().sort((a, b) => b - a);
     const ctx = omahaContext(board, gameId);
-    const pairs = PAIR_SLOTS.map(([i, j]) => [cards[i], cards[j]]);
+    const pairs = combinations(cards, 2);
     const table = buildPairTable(board, pairs);
-    const res = combineOmaha(table, cards, ctx);
+    let result = null;
+    enumerateOmaha(cards, cards.length, table, ctx, (made, flags, low) => { result = { made, flags, low }; });
     let high = null;
     for (const [hi, lo] of pairs) {
       for (const t of combinations(board, 3)) {
@@ -711,10 +765,10 @@
       }
     }
     return {
-      categories: [MADE_IDS[res.made]].concat(ctx.flagIds.filter((id, b) => res.flags & (1 << b))),
+      categories: [MADE_IDS[result.made]].concat(ctx.flagIds.filter((id, b) => result.flags & (1 << b))),
       high,
-      low: res.low,
-      isNutLow: res.low !== NO_LOW && res.low === ctx.nutLow,
+      low: result.low,
+      isNutLow: result.low !== NO_LOW && result.low === ctx.nutLow,
     };
   }
 

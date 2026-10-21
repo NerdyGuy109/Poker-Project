@@ -285,3 +285,9 @@ tr.on .bar { opacity: 1; }
   .game-tabs .long { display: none; }
   .game-tabs .short { display: inline; }
 }
+body.busy .layout { opacity: 0.45; pointer-events: none; transition: opacity 0.15s; }
+body.busy { cursor: progress; }
+@media (max-width: 560px) {
+  .game-tabs { flex-wrap: nowrap; width: 100%; }
+  .game-tabs button { flex: 1; padding: 7px 4px; white-space: nowrap; }
+}

@@ -1,6 +1,6 @@
 # Poker Board Analyzer
 
-A static website for poker math. It deals a board and counts how many starting hands fall into each hand group, for **no-limit hold'em**, **pot-limit Omaha** and **PLO hi-lo (8 or better)**. Pick the game with the tabs at the top.
+A static website for poker math. It deals a board and counts how many starting hands fall into each hand group, for **no-limit hold'em**, **pot-limit Omaha**, **PLO hi-lo (8 or better)**, **5-card PLO** and **Big O** (5-card PLO hi-lo). Pick the game with the tabs at the top.
 
 ## Running it
 
@@ -21,6 +21,8 @@ There's no build step. Open `index.html` in a browser, or serve the folder (for 
   - a **distribution bar** of the highlighted groups
   - a **Check a hand** box (type 4 cards to see their groups, best high hand and low)
   - **example hands**: a random sample from any group
+- **5-card PLO:** like PLO but with 5 hole cards, still using exactly two. There are about 1.9 million hands on the flop; counting them takes roughly half a second, and the page shows "Counting…" meanwhile.
+- **Big O:** 5-card PLO played hi-lo, with the same low groups as PLO8.
 - **PLO hi-lo (8 or better):** Omaha rules, plus a low group. A low uses five different cards 8 or lower (aces low), again with exactly two hole cards. The groups are *Nut low* (the best low possible on the board), *Any made low* and *Low draw* (the next card can make a low).
 
 Omaha draws add **Wrap (9+ straight outs)**. *Open-ended* means 5–8 outs and *Gutshot* means 1–4. Outs are counted as unseen cards, so your own cards reduce them. Made-hand groups work like hold'em, applied to the best two-card pair from your four cards.
