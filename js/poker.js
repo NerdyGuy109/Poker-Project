@@ -772,6 +772,282 @@
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Equity calculator
+  // ---------------------------------------------------------------------------
+
+  // Allocation-free version of evaluate(): returns the same score for the first n cards.
+  const scratchCounts = new Uint8Array(13);
+  const scratchSuitMask = new Int32Array(4);
+  const scratchSuitCount = new Uint8Array(4);
+  const scratchSingles = new Int8Array(8);
+
+  function pack(cat, k0, k1, k2, k3, k4) {
+    return ((((cat * 15 + k0 + 1) * 15 + k1 + 1) * 15 + k2 + 1) * 15 + k3 + 1) * 15 + k4 + 1;
+  }
+
+  function scoreCards(cards, n) {
+    scratchCounts.fill(0);
+    scratchSuitMask.fill(0);
+    scratchSuitCount.fill(0);
+    let mask = 0;
+    for (let i = 0; i < n; i++) {
+      const c = cards[i];
+      const r = c >> 2;
+      const s = c & 3;
+      scratchCounts[r]++;
+      scratchSuitMask[s] |= 1 << r;
+      scratchSuitCount[s]++;
+      mask |= 1 << r;
+    }
+    let flushSuit = -1;
+    for (let s = 0; s < 4; s++) if (scratchSuitCount[s] >= 5) flushSuit = s;
+    if (flushSuit >= 0) {
+      const sf = straightHigh(scratchSuitMask[flushSuit]);
+      if (sf >= 0) return pack(HAND.STRAIGHT_FLUSH, sf, -1, -1, -1, -1);
+    }
+
+    let quad = -1, t1 = -1, t2 = -1, p1 = -1, p2 = -1, p3 = -1, ns = 0;
+    for (let r = 12; r >= 0; r--) {
+      const c = scratchCounts[r];
+      if (c === 4) quad = r;
+      else if (c === 3) { if (t1 < 0) t1 = r; else if (t2 < 0) t2 = r; }
+      else if (c === 2) { if (p1 < 0) p1 = r; else if (p2 < 0) p2 = r; else if (p3 < 0) p3 = r; }
+      else if (c === 1) scratchSingles[ns++] = r;
+    }
+    for (let i = ns; i < 5; i++) scratchSingles[i] = -1;
+    const s0 = scratchSingles[0], s1 = scratchSingles[1], s2 = scratchSingles[2], s3 = scratchSingles[3], s4 = scratchSingles[4];
+
+    if (quad >= 0) return pack(HAND.QUADS, quad, Math.max(t1, p1, s0), -1, -1, -1);
+    if (t1 >= 0 && (t2 >= 0 || p1 >= 0)) return pack(HAND.FULL_HOUSE, t1, Math.max(t2, p1), -1, -1, -1);
+    if (flushSuit >= 0) {
+      const fm = scratchSuitMask[flushSuit];
+      let f = 0;
+      for (let r = 12; r >= 0 && f < 5; r--) if (fm & (1 << r)) scratchSingles[f++] = r;
+      return pack(HAND.FLUSH, scratchSingles[0], scratchSingles[1], scratchSingles[2], scratchSingles[3], scratchSingles[4]);
+    }
+    const st = straightHigh(mask);
+    if (st >= 0) return pack(HAND.STRAIGHT, st, -1, -1, -1, -1);
+    if (t1 >= 0) return pack(HAND.TRIPS, t1, s0, s1, -1, -1);
+    if (p2 >= 0) return pack(HAND.TWO_PAIR, p1, p2, Math.max(p3, s0), -1, -1);
+    if (p1 >= 0) return pack(HAND.PAIR, p1, s0, s1, s2, -1);
+    return pack(HAND.HIGH_CARD, s0, s1, s2, s3, s4);
+  }
+
+  // 8-or-better lows as bitmasks of low values (bit 1 = ace ... bit 8 = eight). Five bits set is a
+  // qualifying low, and a numerically smaller mask is a better low (it compares the top card first).
+  const lowBitOfCard = (c) => {
+    const v = lowValueOfRank(rankOf(c));
+    return v ? 1 << v : 0;
+  };
+
+  function lowMaskOf(cardsList) {
+    let m = 0;
+    for (const c of cardsList) {
+      const b = lowBitOfCard(c);
+      if (!b || (m & b)) return 0;
+      m |= b;
+    }
+    return m;
+  }
+
+  const BOARD_TRIPLES = combinations([0, 1, 2, 3, 4], 3);
+
+  // Per-player data that doesn't depend on the board: hole pairs and their low masks (Omaha).
+  function prepareHand(hand, omaha) {
+    if (!omaha) return { hand };
+    const pairs = combinations(hand, 2);
+    return { hand, pairs, pairLow: pairs.map(lowMaskOf) };
+  }
+
+  const scratchHand = new Array(7);
+
+  // Scores one complete runout. Fills hi[] (higher is better) and lo[] (lower is better, Infinity = none).
+  function scoreRunout(players, board, omaha, hiLo, hi, lo) {
+    if (!omaha) {
+      for (let i = 0; i < 5; i++) scratchHand[i] = board[i];
+      for (let p = 0; p < players.length; p++) {
+        scratchHand[5] = players[p].hand[0];
+        scratchHand[6] = players[p].hand[1];
+        hi[p] = scoreCards(scratchHand, 7);
+        lo[p] = Infinity;
+      }
+      return;
+    }
+    const triples = BOARD_TRIPLES.map((t) => [board[t[0]], board[t[1]], board[t[2]]]);
+    const tripleLow = hiLo ? triples.map(lowMaskOf) : null;
+    for (let p = 0; p < players.length; p++) {
+      const { pairs, pairLow } = players[p];
+      let best = -1;
+      let bestLow = Infinity;
+      for (let a = 0; a < pairs.length; a++) {
+        scratchHand[0] = pairs[a][0];
+        scratchHand[1] = pairs[a][1];
+        for (let t = 0; t < 10; t++) {
+          scratchHand[2] = triples[t][0];
+          scratchHand[3] = triples[t][1];
+          scratchHand[4] = triples[t][2];
+          const sc = scoreCards(scratchHand, 5);
+          if (sc > best) best = sc;
+          if (hiLo && pairLow[a] && tripleLow[t] && !(pairLow[a] & tripleLow[t])) {
+            const m = pairLow[a] | tripleLow[t];
+            if (m < bestLow) bestLow = m;
+          }
+        }
+      }
+      hi[p] = best;
+      lo[p] = bestLow;
+    }
+  }
+
+  const EXACT_LIMIT = 5e6; // max hand evaluations for an exact answer
+  const TRIAL_LIMIT = { nlhe: 400000, omaha: 100000 };
+  const TIME_LIMIT_MS = 2500;
+
+  // Builds an equity calculation. hands: array of card arrays, or null for a random hand.
+  // Call step(ms) until it returns true (lets a page stay responsive), or run() to finish at once.
+  function createEquityJob(hands, board, gameId) {
+    const game = GAMES[gameId];
+    const omaha = game.holeCards > 2;
+    const hiLo = !!game.hiLo;
+    const k = game.holeCards;
+    const nPlayers = hands.length;
+    if (nPlayers < 2) throw new Error('Equity needs at least two players.');
+    if (board.length > 5) throw new Error('The board has too many cards.');
+
+    const known = board.slice();
+    for (const h of hands) {
+      if (!h) continue;
+      if (h.length !== k) throw new Error('Each hand needs exactly ' + k + ' cards.');
+      known.push(...h);
+    }
+    if (new Set(known).size !== known.length) throw new Error('The same card is used twice.');
+    const knownSet = new Set(known);
+    const deck = [];
+    for (let c = 0; c < 52; c++) if (!knownSet.has(c)) deck.push(c);
+
+    const randomSeats = hands.map((h, i) => (h ? -1 : i)).filter((i) => i >= 0);
+    const need = 5 - board.length;
+    if (deck.length < need + randomSeats.length * k) throw new Error('Not enough cards left in the deck.');
+
+    const players = hands.map((h) => (h ? prepareHand(h, omaha) : null));
+    const evalsPerPlayer = omaha ? binomial(k, 2) * 10 : 1;
+    const runouts = binomial(deck.length, need);
+    const exact = randomSeats.length === 0 && runouts * nPlayers * evalsPerPlayer <= EXACT_LIMIT;
+    const maxTrials = exact ? runouts : TRIAL_LIMIT[omaha ? 'omaha' : 'nlhe'];
+
+    const stats = hands.map(() => ({ share: 0, win: 0, tie: 0, high: 0, low: 0 }));
+    const hi = new Float64Array(nPlayers);
+    const lo = new Float64Array(nPlayers);
+    const fullBoard = board.concat(new Array(need).fill(0));
+    const combo = Array.from({ length: need }, (_, i) => i); // exact enumeration state
+    let done = 0;
+    let started = 0;
+    let finished = false;
+
+    function settle() {
+      scoreRunout(players, fullBoard, omaha, hiLo, hi, lo);
+      let bestHi = -1;
+      let hiCount = 0;
+      let bestLo = Infinity;
+      let loCount = 0;
+      for (let p = 0; p < nPlayers; p++) {
+        if (hi[p] > bestHi) { bestHi = hi[p]; hiCount = 1; } else if (hi[p] === bestHi) hiCount++;
+        if (lo[p] < bestLo) { bestLo = lo[p]; loCount = 1; } else if (lo[p] === bestLo && lo[p] !== Infinity) loCount++;
+      }
+      const lowPot = hiLo && bestLo !== Infinity ? 0.5 : 0;
+      const highPot = 1 - lowPot;
+      for (let p = 0; p < nPlayers; p++) {
+        let share = 0;
+        if (hi[p] === bestHi) { share += highPot / hiCount; stats[p].high++; }
+        if (lowPot && lo[p] === bestLo) { share += lowPot / loCount; stats[p].low++; }
+        stats[p].share += share;
+        if (share > 0.999999) stats[p].win++;
+        else if (share > 0) stats[p].tie++;
+      }
+      done++;
+    }
+
+    function nextExact() {
+      for (let i = 0; i < need; i++) fullBoard[board.length + i] = deck[combo[i]];
+      settle();
+      // Advance to the next combination of `need` deck indexes.
+      let i = need - 1;
+      while (i >= 0 && combo[i] === deck.length - need + i) i--;
+      if (i < 0) return false;
+      combo[i]++;
+      for (let j = i + 1; j < need; j++) combo[j] = combo[j - 1] + 1;
+      return true;
+    }
+
+    // Partial Fisher-Yates on the shared deck array: uniform without resetting it each trial.
+    function nextRandom() {
+      let pos = 0;
+      const take = () => {
+        const j = pos + Math.floor(Math.random() * (deck.length - pos));
+        const c = deck[j];
+        deck[j] = deck[pos];
+        deck[pos] = c;
+        pos++;
+        return c;
+      };
+      for (const seat of randomSeats) {
+        const hand = [];
+        for (let i = 0; i < k; i++) hand.push(take());
+        players[seat] = prepareHand(hand, omaha);
+      }
+      for (let i = 0; i < need; i++) fullBoard[board.length + i] = take();
+      settle();
+    }
+
+    function step(ms) {
+      if (finished) return true;
+      if (!started) started = Date.now();
+      const until = Date.now() + ms;
+      while (Date.now() < until) {
+        for (let i = 0; i < 200; i++) {
+          if (exact) {
+            if (!nextExact()) { finished = true; return true; }
+          } else {
+            nextRandom();
+            if (done >= maxTrials) { finished = true; return true; }
+          }
+        }
+        if (!exact && Date.now() - started > TIME_LIMIT_MS) { finished = true; return true; }
+      }
+      return false;
+    }
+
+    function results() {
+      return {
+        exact,
+        hiLo,
+        runouts: done,
+        progress: Math.min(1, exact ? done / maxTrials : Math.max(done / maxTrials, started ? (Date.now() - started) / TIME_LIMIT_MS : 0)),
+        players: stats.map((s) => ({
+          equity: done ? s.share / done : 0,
+          win: done ? s.win / done : 0,
+          tie: done ? s.tie / done : 0,
+          high: done ? s.high / done : 0,
+          low: done ? s.low / done : 0,
+          // Standard error of the equity estimate (0 for exact answers).
+          error: exact || !done ? 0 : Math.sqrt(Math.max(s.share / done * (1 - s.share / done), 1e-9) / done),
+        })),
+      };
+    }
+
+    return {
+      exact,
+      totalRunouts: exact ? runouts : null,
+      step,
+      results,
+      run() {
+        while (!step(1000));
+        return results();
+      },
+    };
+  }
+
   const HAND_NAMES = ['High card', 'One pair', 'Two pair', 'Three of a kind', 'Straight', 'Flush', 'Full house', 'Four of a kind', 'Straight flush'];
 
   const api = {
@@ -787,6 +1063,8 @@
     lowToString,
     classifyOmaha,
     parseCardList,
+    scoreCards,
+    createEquityJob,
     rankOf,
     suitOf,
     makeCard,

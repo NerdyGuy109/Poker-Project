@@ -205,3 +205,57 @@ test('analyzeBoard counts every 5-card hand once and can rebuild any hand', () =
   // Lexicographic order: the first hand is the five highest live cards.
   assert.deepEqual(a.cardsOf(0).map(P.cardToString), ['Ac', 'Ad', 'Ah', 'As', 'Kc']);
 });
+
+test('scoreCards agrees with evaluate', () => {
+  for (let i = 0; i < 5000; i++) {
+    const n = 5 + (i % 3);
+    const cs = P.drawCards(n);
+    assert.equal(P.scoreCards(cs, n), P.evaluate(cs).score, cs.map(P.cardToString).join(' '));
+  }
+});
+
+const equity = (hands, board, game) =>
+  P.createEquityJob(hands.map((h) => (h ? cards(h) : null)), board ? cards(board) : [], game || 'nlhe').run();
+
+test('exact hold\'em equity matches known results', () => {
+  const r = equity(['As Ks', 'Qd Qc']); // a classic race
+  assert.ok(r.exact);
+  assert.equal(r.runouts, 1712304);
+  assert.ok(Math.abs(r.players[0].equity - 0.4621) < 0.001);
+  const flop = equity(['As Ah', 'Kd Kc'], 'Kh 7d 2c');
+  assert.equal(flop.runouts, 990);
+  assert.equal(flop.players[1].equity.toFixed(4), (905 / 990).toFixed(4)); // the aces mostly need one of the two remaining aces
+  const total = flop.players[0].equity + flop.players[1].equity;
+  assert.ok(Math.abs(total - 1) < 1e-9);
+  // A chopped board: everyone plays the royal flush.
+  const chop = equity(['2c 3d', '4h 5s'], 'As Ks Qs Js Ts');
+  assert.deepEqual(chop.players.map((p) => p.equity), [0.5, 0.5]);
+  assert.equal(chop.players[0].tie, 1);
+});
+
+test('equity against a random hand is simulated', () => {
+  const r = equity(['As Ah', null]);
+  assert.ok(!r.exact);
+  assert.ok(Math.abs(r.players[0].equity - 0.852) < 0.01);
+});
+
+test('Omaha equity uses exactly two hole cards, and hi-lo splits the pot', () => {
+  // Hold'em would give the ace-high flush; in Omaha the single heart can't play.
+  const r = equity(['Ah Kc Qd Jc', '7s 7d 2c 3d'], '9h 5h 2h Th 7c', 'plo');
+  assert.deepEqual(r.players.map((p) => p.equity), [0, 1]);
+  // Player 1 has the only low and player 2 the high: an exact split.
+  const split = equity(['As 2d Kc Kd', 'Qs Qd Jc Jh'], 'Qh 7c 4s 8d 9h', 'plo8');
+  assert.deepEqual(split.players.map((p) => p.equity), [0.5, 0.5]);
+  assert.equal(split.players[0].low, 1);
+  assert.equal(split.players[1].high, 1);
+  // No qualifying low: the high hand scoops.
+  const scoop = equity(['As 2d Kc Kd', 'Qs Qd Jc Jh'], 'Qh Tc 4s 8d 9h', 'plo8');
+  assert.deepEqual(scoop.players.map((p) => p.equity), [0, 1]);
+  assert.equal(scoop.players[1].win, 1);
+});
+
+test('createEquityJob rejects bad input', () => {
+  assert.throws(() => P.createEquityJob([cards('As Ks')], [], 'nlhe'), /two players/);
+  assert.throws(() => P.createEquityJob([cards('As Ks'), cards('As Qd')], [], 'nlhe'), /twice/);
+  assert.throws(() => P.createEquityJob([cards('As Ks'), cards('Qd Qc')], [], 'plo'), /exactly 4/);
+});

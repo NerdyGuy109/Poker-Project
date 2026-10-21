@@ -27,6 +27,17 @@ There's no build step. Open `index.html` in a browser, or serve the folder (for 
 
 Omaha draws add **Wrap (9+ straight outs)**. *Open-ended* means 5–8 outs and *Gutshot* means 1–4. Outs are counted as unseen cards, so your own cards reduce them. Made-hand groups work like hold'em, applied to the best two-card pair from your four cards.
 
+## Equity calculator
+
+Switch to **Equity** (top right) to compare 2–6 players on the current board. Clear the board for preflop.
+
+- **Hands:** type each player's hand (`As Kd`, or 4/5 cards for Omaha games), press *Random*, or leave it blank so that player gets a fresh random hand on every runout. Dealing board cards in this view never uses cards a player holds.
+- **Exact or simulated:**
+  - When every hand is known and the work is small enough, every possible runout is checked, for example hold'em preflop heads-up (1,712,304 runouts) or any flop or turn spot.
+  - Otherwise (random hands, or Omaha preflop) it runs a Monte Carlo simulation for up to ~2.5 seconds and shows the margin of error.
+- **Results:** equity (your average share of the pot) with win and tie rates. For PLO8 and Big O the pot splits between the best high and the best qualifying low (a high hand scoops when there's no low), and the results show scoop %, *wins high* and *wins low*.
+- Results update by themselves when the board changes.
+
 ## Hand groups
 
 **Made hands:** every combo is in exactly one of these. Straight flush, quads, full house, flush and straight come from the best 5-card hand. Weaker hands are judged only by what the hole cards add:
@@ -61,6 +72,6 @@ If a hand is in more than one highlighted group, it takes the color of the first
 ## Project layout
 
 - `index.html`, `css/styles.css`: the page
-- `js/poker.js`: cards, hand evaluator, hold'em and Omaha classifiers, range analysis (no DOM; also loads in Node)
+- `js/poker.js`: cards, hand evaluators, hold'em and Omaha classifiers, range analysis, equity calculator (no DOM; also loads in Node)
 - `js/app.js`: UI
 - `tests/`: unit tests, run with `npm test` (Node 18+)

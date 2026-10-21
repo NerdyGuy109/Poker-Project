@@ -13,13 +13,19 @@
   </header>
 
   <main>
-    <nav class="game-tabs" role="tablist" aria-label="Game">
-      <button type="button" role="tab" data-game="nlhe" title="No-limit hold&rsquo;em">NLHE</button>
-      <button type="button" role="tab" data-game="plo" title="Pot-limit Omaha">PLO</button>
-      <button type="button" role="tab" data-game="plo8" title="PLO hi-lo (8 or better)">PLO8</button>
-      <button type="button" role="tab" data-game="plo5" title="5-card PLO">PLO5</button>
-      <button type="button" role="tab" data-game="bigo" title="Big O (5-card hi-lo)">Big O</button>
-    </nav>
+    <div class="toolbar">
+      <nav class="game-tabs" role="tablist" aria-label="Game">
+        <button type="button" role="tab" data-game="nlhe" title="No-limit hold&rsquo;em">NLHE</button>
+        <button type="button" role="tab" data-game="plo" title="Pot-limit Omaha">PLO</button>
+        <button type="button" role="tab" data-game="plo8" title="PLO hi-lo (8 or better)">PLO8</button>
+        <button type="button" role="tab" data-game="plo5" title="5-card PLO">PLO5</button>
+        <button type="button" role="tab" data-game="bigo" title="Big O (5-card hi-lo)">Big O</button>
+      </nav>
+      <nav class="game-tabs view-tabs" role="tablist" aria-label="View">
+        <button type="button" role="tab" data-view="range">Hand groups</button>
+        <button type="button" role="tab" data-view="equity">Equity</button>
+      </nav>
+    </div>
     <p class="game-note" id="game-note"></p>
 
     <section class="panel board-panel" aria-labelledby="board-heading">
@@ -83,7 +89,21 @@
       <p class="board-hint">Tip: click any card on the board to choose it yourself.</p>
     </section>
 
-    <div class="layout">
+    <section class="panel equity-panel" id="equity-panel" aria-labelledby="equity-heading" hidden>
+      <div class="panel-head">
+        <h2 id="equity-heading">Equity calculator</h2>
+        <span class="hint">Uses the board above (clear it for preflop). Leave a hand blank to deal that player a random hand.</span>
+      </div>
+      <div class="equity-players" id="equity-players"></div>
+      <div class="equity-actions">
+        <button type="button" id="equity-add" class="ghost">+ Add player</button>
+        <button type="button" id="equity-run" class="primary">Calculate</button>
+      </div>
+      <div class="equity-progress" id="equity-progress" hidden><span id="equity-progress-bar"></span></div>
+      <p class="equity-status" id="equity-status" aria-live="polite"></p>
+    </section>
+
+    <div class="layout" id="range-layout">
       <section class="panel grid-panel" id="grid-panel" aria-labelledby="grid-heading">
         <div class="panel-head">
           <h2 id="grid-heading">Hand grid</h2>

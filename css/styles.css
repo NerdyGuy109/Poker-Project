@@ -43,6 +43,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -285,4 +286,38 @@ body.busy { cursor: progress; }
 @media (max-width: 560px) {
   .game-tabs { flex-wrap: nowrap; width: 100%; }
   .game-tabs button { flex: 1; padding: 7px 4px; white-space: nowrap; }
+}
+
+/* ---------- Toolbar and equity calculator ---------- */
+
+.toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.view-tabs button { padding: 7px 16px; }
+
+.equity-panel .panel-head { margin-bottom: 6px; }
+.equity-players { display: grid; gap: 14px; }
+.eq-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.1fr); gap: 6px 14px; align-items: center; }
+.eq-label { font-weight: 600; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.eq-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--player); flex: none; }
+.eq-inputs { display: flex; gap: 6px; min-width: 0; }
+.eq-inputs input { flex: 1; min-width: 0; }
+.eq-remove { padding: 4px 10px; font-size: 1.1rem; line-height: 1; }
+.eq-result { min-height: 38px; display: flex; flex-direction: column; justify-content: center; gap: 4px; transition: opacity 0.15s; }
+.eq-result.stale { opacity: 0.4; }
+.eq-result.error { color: #d0263a; font-size: 0.85rem; }
+.eq-bar { height: 10px; border-radius: 5px; background: var(--cell-bg); overflow: hidden; }
+.eq-bar span { display: block; height: 100%; background: var(--player); border-radius: 5px; }
+.eq-numbers { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-variant-numeric: tabular-nums; }
+.eq-numbers strong { font-size: 1.15rem; }
+.eq-details { color: var(--muted); font-size: 0.82rem; }
+.equity-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 16px; }
+.equity-progress { margin-top: 12px; height: 4px; border-radius: 2px; background: var(--cell-bg); overflow: hidden; }
+.equity-progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.1s; }
+.equity-status { color: var(--muted); font-size: 0.85rem; margin: 10px 0 0; min-height: 1.2em; }
+
+@media (max-width: 760px) {
+  .eq-row { grid-template-columns: minmax(0, 1fr); padding-bottom: 12px; border-bottom: 1px solid var(--panel-border); }
+  .eq-result { min-height: 0; }
+}
+@media (max-width: 560px) {
+  .view-tabs { width: 100%; }
 }

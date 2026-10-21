@@ -12,6 +12,8 @@
     analysis: null,
     selectedCell: null,
     game: 'nlhe',
+    view: 'range', // 'range' (hand groups) or 'equity'
+    equity: { hands: ['', ''], ran: false },
     priorityGroup: 'made', // which section of hand groups gets color first
     exampleCat: null,
     checkText: '',
@@ -53,6 +55,7 @@
       };
     }
     if (P.GAMES[saved.game]) state.game = saved.game;
+    if (saved.view === 'equity') state.view = 'equity';
     state.priorityGroup = ['made', 'draw', 'low'].includes(saved.priorityGroup) ? saved.priorityGroup
       : saved.drawsFirst ? 'draw' : 'made';
     const t = saved.texture || {};
@@ -61,7 +64,7 @@
 
   function saveSettings() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ highlight: state.highlight, priorityGroup: state.priorityGroup, texture: state.texture, game: state.game }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ highlight: state.highlight, priorityGroup: state.priorityGroup, texture: state.texture, game: state.game, view: state.view }));
     } catch (e) { /* storage unavailable */ }
   }
 
@@ -83,9 +86,19 @@
     state.turn === null ? [] : [state.turn],
     state.river === null ? [] : [state.river]);
 
+  // In the equity view, cards in the players' hands can't be dealt to the board.
+  function heldCards() {
+    if (state.view !== 'equity') return [];
+    const held = [];
+    for (const text of state.equity.hands) {
+      try { held.push(...P.parseCardList(text)); } catch (e) { /* a half-typed hand holds nothing */ }
+    }
+    return held;
+  }
+
   function newFlop() {
     // The turn and river belong to the old hand, so they go too.
-    state.flop = P.drawFlop(state.texture);
+    state.flop = P.drawFlop(state.texture, heldCards()) || P.drawFlop({}, heldCards());
     state.turn = null;
     state.river = null;
     update();
@@ -100,7 +113,7 @@
 
   function newTurn() {
     if (!flopComplete()) return;
-    state.turn = P.drawCards(1, state.flop.concat(state.river === null ? [] : [state.river]))[0];
+    state.turn = P.drawCards(1, state.flop.concat(state.river === null ? [] : [state.river], heldCards()))[0];
     update();
   }
 
@@ -112,7 +125,7 @@
 
   function newRiver() {
     if (state.turn === null) return;
-    state.river = P.drawCards(1, state.flop.concat([state.turn]))[0];
+    state.river = P.drawCards(1, state.flop.concat([state.turn], heldCards()))[0];
     update();
   }
 
@@ -191,12 +204,20 @@
     for (const opt of $('flop-suits').options) opt.disabled = !P.textureIsPossible(opt.value, state.texture.pairing);
     for (const opt of $('flop-pairing').options) opt.disabled = !P.textureIsPossible(state.texture.suits, opt.value);
 
+    const street = state.river !== null ? 'River' : state.turn !== null ? 'Turn' : 'Flop';
+    if (state.view === 'equity') {
+      const shown = boardCards().length;
+      $('summary').innerHTML = shown === 0
+        ? '<strong>Preflop</strong> &middot; equity over all five board cards to come'
+        : '<strong>' + (flopComplete() ? street : 'Partial flop') + '</strong> &middot; ' +
+          (shown === 5 ? 'all board cards are out' : 'equity over the ' + (5 - shown) + ' board card' + (shown === 4 ? '' : 's') + ' to come');
+      return;
+    }
     const a = state.analysis;
     if (!a) {
       $('summary').innerHTML = 'Pick all three flop cards, or deal a new flop, to see the analysis.';
       return;
     }
-    const street = state.river !== null ? 'River' : state.turn !== null ? 'Turn' : 'Flop';
     const t = P.flopTexture(state.flop);
     const textureText = { monotone: 'Monotone', 'two-tone': 'Two-tone', rainbow: 'Rainbow' }[t.suits] +
       (t.pairing === 'unpaired' ? '' : t.pairing === 'paired' ? ', paired' : ', trips');
@@ -212,7 +233,7 @@
   function openPicker(slot) {
     state.pickerSlot = slot;
     const current = slotCard(slot);
-    const dead = new Set(boardCards().filter((c) => c !== current));
+    const dead = new Set(boardCards().filter((c) => c !== current).concat(heldCards()));
     $('picker-title').textContent = (current === null ? 'Choose the ' : 'Change the ') + SLOT_NAMES[slot];
 
     const html = [];
@@ -221,7 +242,7 @@
         const c = P.makeCard(rank, suit);
         const used = dead.has(c);
         html.push('<button type="button" class="pick' + (c === current ? ' current' : '') + '" data-card="' + c + '"' +
-          (used ? ' disabled title="Already on the board"' : '') + ' aria-label="' + P.cardToString(c) + '">' +
+          (used ? ' disabled title="Already in use"' : '') + ' aria-label="' + P.cardToString(c) + '">' +
           cardHTML(c, true) + '</button>');
       }
     }
@@ -238,7 +259,7 @@
 
   function pickRandom() {
     const current = slotCard(state.pickerSlot);
-    const exclude = boardCards().concat(current === null ? [] : [current]);
+    const exclude = boardCards().concat(current === null ? [] : [current], heldCards());
     pickCard(P.drawCards(1, exclude)[0]);
   }
 
@@ -544,11 +565,159 @@
     }
     $('game-note').innerHTML = '<strong>' + game().name + ':</strong> ' + GAME_NOTES[state.game];
     $('check-text').placeholder = game().holeCards === 5 ? 'e.g. As Ks Qd Jd 9c' : 'e.g. As Ks Qd Jd';
+    for (const tab of document.querySelectorAll('[data-view]')) {
+      const on = tab.dataset.view === state.view;
+      tab.classList.toggle('active', on);
+      tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    }
+    $('range-layout').hidden = state.view !== 'range';
+    $('equity-panel').hidden = state.view !== 'equity';
     $('grid-panel').hidden = isOmaha();
     $('omaha-panel').hidden = !isOmaha();
     const lowOpt = $('color-priority').querySelector('option[value="low"]');
     lowOpt.hidden = lowOpt.disabled = !game().hiLo;
     $('color-priority').value = state.priorityGroup === 'low' && !game().hiLo ? 'made' : state.priorityGroup;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Equity calculator
+  // ---------------------------------------------------------------------------
+
+  const PLAYER_COLORS = ['#3d7bff', '#ff7a45', '#10c48a', '#b14cff', '#e0b100', '#ff2d95'];
+  const MAX_PLAYERS = 6;
+  let equityToken = 0;
+
+  function renderEquityPlayers() {
+    const n = game().holeCards;
+    const example = { 2: 'As Kd', 4: 'As Kd Qh Jc', 5: 'As Kd Qh Jc 9s' }[n];
+    const hands = state.equity.hands;
+    $('equity-players').innerHTML = hands.map((text, i) =>
+      '<div class="eq-row" style="--player:' + PLAYER_COLORS[i] + '">' +
+        '<label class="eq-label" for="eq-input-' + i + '"><span class="eq-dot"></span>Player ' + (i + 1) + '</label>' +
+        '<div class="eq-inputs">' +
+          '<input id="eq-input-' + i + '" data-eq-input="' + i + '" type="text" value="' + text.replace(/"/g, '&quot;') + '"' +
+          ' placeholder="Blank = random hand" title="Type ' + n + ' cards, e.g. ' + example + '" autocomplete="off" spellcheck="false" autocapitalize="off">' +
+          '<button type="button" data-eq-random="' + i + '">Random</button>' +
+          '<button type="button" class="ghost eq-remove" data-eq-remove="' + i + '" aria-label="Remove player ' + (i + 1) + '"' +
+          (hands.length <= 2 ? ' disabled' : '') + '>&times;</button>' +
+        '</div>' +
+        '<div class="eq-result" id="eq-result-' + i + '"></div>' +
+      '</div>').join('');
+    $('equity-add').disabled = hands.length >= MAX_PLAYERS;
+  }
+
+  // Parses every player's hand. Returns { hands, errors } where hands[i] is null for a random hand.
+  function readEquityHands() {
+    const need = game().holeCards;
+    const board = new Set(boardCards());
+    const used = new Map();
+    const hands = [];
+    const errors = [];
+    state.equity.hands.forEach((text, i) => {
+      if (!text.trim()) { hands.push(null); return; }
+      try {
+        const cards = P.parseCardList(text);
+        if (cards.length !== need) throw new Error('Enter exactly ' + need + ' cards, or leave it blank for a random hand.');
+        for (const c of cards) {
+          if (board.has(c)) throw new Error(P.cardToString(c) + ' is on the board.');
+          if (used.has(c)) throw new Error(P.cardToString(c) + ' is already in Player ' + (used.get(c) + 1) + '’s hand.');
+        }
+        cards.forEach((c) => used.set(c, i));
+        hands.push(cards);
+      } catch (e) {
+        hands.push(null);
+        errors[i] = e.message;
+      }
+    });
+    return { hands, errors };
+  }
+
+  function randomHandFor(i) {
+    const dead = boardCards().slice();
+    state.equity.hands.forEach((text, j) => {
+      if (j === i || !text.trim()) return;
+      try { dead.push(...P.parseCardList(text)); } catch (e) { /* ignore a half-typed hand */ }
+    });
+    const hand = P.drawCards(game().holeCards, dead).sort((a, b) => b - a);
+    state.equity.hands[i] = hand.map(P.cardToString).join(' ');
+    $('eq-input-' + i).value = state.equity.hands[i];
+    runEquity();
+  }
+
+  const pctText = (x, digits) => (100 * x).toFixed(digits === undefined ? 1 : digits) + '%';
+
+  function renderEquityResults(r) {
+    r.players.forEach((p, i) => {
+      const el = $('eq-result-' + i);
+      if (!el) return;
+      const details = r.hiLo
+        ? 'Scoop ' + pctText(p.win) + ' &middot; Wins high ' + pctText(p.high) + ' &middot; Wins low ' + pctText(p.low)
+        : 'Win ' + pctText(p.win) + ' &middot; Tie ' + pctText(p.tie);
+      el.classList.remove('stale', 'error');
+      el.innerHTML = '<div class="eq-bar"><span style="width:' + (100 * p.equity).toFixed(2) + '%"></span></div>' +
+        '<div class="eq-numbers"><strong>' + pctText(p.equity, 2) + '</strong> <span class="muted">equity</span>' +
+        '<span class="eq-details">' + details + '</span></div>';
+    });
+  }
+
+  function runEquity() {
+    const token = ++equityToken;
+    const { hands, errors } = readEquityHands();
+    state.equity.hands.forEach((t, i) => {
+      const el = $('eq-result-' + i);
+      if (errors[i]) {
+        el.className = 'eq-result error';
+        el.textContent = errors[i];
+      }
+    });
+    if (errors.length) {
+      $('equity-status').textContent = 'Fix the highlighted hands to calculate.';
+      $('equity-progress').hidden = true;
+      return;
+    }
+
+    let job;
+    try {
+      job = P.createEquityJob(hands, boardCards(), state.game);
+    } catch (e) {
+      $('equity-status').textContent = e.message;
+      return;
+    }
+    state.equity.ran = true;
+    $('equity-progress').hidden = false;
+    $('equity-progress-bar').style.width = '0%';
+    $('equity-status').textContent = job.exact
+      ? 'Checking all ' + job.totalRunouts.toLocaleString() + ' runouts…'
+      : 'Simulating random runouts…';
+
+    const tick = () => {
+      if (token !== equityToken) return; // a newer calculation took over
+      const finished = job.step(40);
+      const r = job.results();
+      renderEquityResults(r);
+      $('equity-progress-bar').style.width = (100 * r.progress).toFixed(1) + '%';
+      if (!finished) {
+        setTimeout(tick, 0);
+        return;
+      }
+      $('equity-progress').hidden = true;
+      if (r.exact) {
+        $('equity-status').textContent = 'Exact: checked every one of ' + r.runouts.toLocaleString() + ' runout' + (r.runouts === 1 ? '' : 's') + '.';
+      } else {
+        const margin = 1.96 * Math.max(...r.players.map((p) => p.error));
+        $('equity-status').textContent = 'Simulated ' + r.runouts.toLocaleString() + ' random runouts' +
+          (hands.includes(null) ? ' and random hands' : '') + '; results are within about ±' + (100 * margin).toFixed(1) + '%.';
+      }
+    };
+    tick();
+  }
+
+  // Marks results out of date while a hand is being edited.
+  function markEquityStale() {
+    equityToken++;
+    $('equity-progress').hidden = true;
+    for (const el of document.querySelectorAll('.eq-result')) if (el.innerHTML) el.classList.add('stale');
+    $('equity-status').textContent = 'Press Calculate (or Enter) to update.';
   }
 
   // ---------------------------------------------------------------------------
@@ -561,6 +730,15 @@
     $('board-text').value = boardCards().map(P.cardToString).join(' ');
     $('board-error').textContent = '';
     const token = ++updateToken;
+    if (state.view === 'equity') {
+      // The hand-group analysis isn't on screen, so skip it; it's redone when switching back.
+      state.analysis = null;
+      document.body.classList.remove('busy');
+      renderGame();
+      renderBoard();
+      if (state.equity.ran) runEquity();
+      return;
+    }
     // 5-card Omaha means ~2 million hands: show the new board first, then count.
     if (flopComplete() && game().holeCards >= 5) {
       state.analysis = null;
@@ -639,9 +817,47 @@
         state.game = tab.dataset.game;
         state.selectedCell = null;
         saveSettings();
+        renderEquityPlayers();
         update();
       });
     }
+
+    for (const tab of document.querySelectorAll('[data-view]')) {
+      tab.addEventListener('click', () => {
+        if (state.view === tab.dataset.view) return;
+        state.view = tab.dataset.view;
+        saveSettings();
+        update();
+      });
+    }
+
+    $('equity-add').addEventListener('click', () => {
+      if (state.equity.hands.length >= MAX_PLAYERS) return;
+      state.equity.hands.push('');
+      renderEquityPlayers();
+      if (state.equity.ran) runEquity();
+    });
+    $('equity-run').addEventListener('click', runEquity);
+    const players = $('equity-players');
+    players.addEventListener('input', (e) => {
+      const i = e.target.dataset.eqInput;
+      if (i === undefined) return;
+      state.equity.hands[+i] = e.target.value;
+      markEquityStale();
+    });
+    players.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.dataset.eqInput !== undefined) runEquity();
+    });
+    players.addEventListener('click', (e) => {
+      const t = e.target.closest('button');
+      if (!t || t.disabled) return;
+      if (t.dataset.eqRandom !== undefined) randomHandFor(+t.dataset.eqRandom);
+      else if (t.dataset.eqRemove !== undefined) {
+        state.equity.hands.splice(+t.dataset.eqRemove, 1);
+        renderEquityPlayers();
+        if (state.equity.ran) runEquity();
+      }
+    });
 
     $('color-priority').addEventListener('change', (e) => {
       state.priorityGroup = e.target.value;
@@ -701,6 +917,7 @@
   }
 
   loadSettings();
+  renderEquityPlayers();
   bind();
   newFlop();
 })();
