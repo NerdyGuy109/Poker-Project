@@ -87,6 +87,12 @@ test('parseBoard accepts common ways of typing cards', () => {
   assert.deepEqual(P.parseBoard('askd7C'), expected);
   assert.deepEqual(P.parseBoard('A♠, K♦, 7♣'), expected);
   assert.deepEqual(P.parseBoard('10h 9h 2c Td'), cards('Th 9h 2c Td'));
+  // "T" and "10" mean the same rank, in any case, with or without spaces, and can be mixed.
+  const tens = cards('Td Th 9c');
+  for (const text of ['Td Th 9c', '10d 10h 9c', 'td th 9c', '10D10H9C', 'Td 10h 9c', '10\u2666 T\u2665 9\u2663']) {
+    assert.deepEqual(P.parseBoard(text), tens, text);
+  }
+  assert.throws(() => P.parseBoard('Tc 10c 9c'), /twice/);
   assert.throws(() => P.parseBoard('As Kd'), /3 to 5/);
   assert.throws(() => P.parseBoard('As Kd 7c 2h 3h 4h'), /3 to 5/);
   assert.throws(() => P.parseBoard('As As 7c'), /twice/);
