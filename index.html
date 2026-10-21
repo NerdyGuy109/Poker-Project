@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Poker Board Analyzer</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>Poker Board Analyzer</h1>
+    <p class="subtitle">Deal a board, then see how many combos of every hand class it leaves.</p>
+  </header>
+
+  <main>
+    <section class="panel board-panel" aria-labelledby="board-heading">
+      <h2 id="board-heading" class="visually-hidden">Community cards</h2>
+      <div class="board">
+        <div class="street">
+          <div class="street-cards" id="flop-cards"></div>
+          <div class="street-label">Flop</div>
+          <div class="street-buttons">
+            <button type="button" id="new-flop" class="primary">New flop</button>
+          </div>
+        </div>
+        <div class="street">
+          <div class="street-cards" id="turn-cards"></div>
+          <div class="street-label">Turn</div>
+          <div class="street-buttons">
+            <button type="button" id="new-turn">New turn</button>
+            <button type="button" id="clear-turn" class="ghost">Clear</button>
+          </div>
+        </div>
+        <div class="street">
+          <div class="street-cards" id="river-cards"></div>
+          <div class="street-label">River</div>
+          <div class="street-buttons">
+            <button type="button" id="new-river">New river</button>
+            <button type="button" id="clear-river" class="ghost">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div class="summary" id="summary" aria-live="polite"></div>
+    </section>
+
+    <div class="layout">
+      <section class="panel grid-panel" aria-labelledby="grid-heading">
+        <div class="panel-head">
+          <h2 id="grid-heading">Hand grid</h2>
+          <span class="hint">Suited above the diagonal, offsuit below. Click a cell to see its combos.</span>
+        </div>
+        <div class="hand-grid" id="hand-grid" role="grid" aria-label="Starting hand grid"></div>
+        <div class="cell-detail" id="cell-detail"></div>
+      </section>
+
+      <section class="panel categories-panel" aria-labelledby="cat-heading">
+        <div class="panel-head">
+          <h2 id="cat-heading">Hand groups</h2>
+          <label class="priority-toggle">
+            <input type="checkbox" id="draws-first">
+            Draws take priority
+          </label>
+        </div>
+        <p class="hint">Tick a group to color it on the grid. Click the swatch to change its color.
+          If a combo fits several ticked groups, it takes the color of the first one in the list.</p>
+        <div id="category-tables"></div>
+        <div class="highlight-total" id="highlight-total"></div>
+      </section>
+    </div>
+  </main>
+
+  <script src="js/poker.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

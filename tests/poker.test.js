@@ -1,0 +1,82 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const P = require('../js/poker.js');
+
+const cards = P.parseCards;
+const evalCat = (str) => P.evaluate(cards(str)).category;
+const classify = (hole, board) => P.classify(cards(hole), cards(board));
+
+test('evaluates hand categories', () => {
+  assert.equal(evalCat('As Ks Qs Js Ts 2d 3c'), P.HAND.STRAIGHT_FLUSH);
+  assert.equal(evalCat('Ah 2h 3h 4h 5h'), P.HAND.STRAIGHT_FLUSH);
+  assert.equal(evalCat('9c 9d 9h 9s 2c'), P.HAND.QUADS);
+  assert.equal(evalCat('9c 9d 9h 2s 2c 2d Ac'), P.HAND.FULL_HOUSE);
+  assert.equal(evalCat('2c 7c 9c Jc Kc Ad'), P.HAND.FLUSH);
+  assert.equal(evalCat('As 2d 3c 4h 5s'), P.HAND.STRAIGHT);
+  assert.equal(evalCat('Qs Kd Ac 2h 3s'), P.HAND.HIGH_CARD); // no wraparound straights
+  assert.equal(evalCat('7s 7d 7c Ah 2s'), P.HAND.TRIPS);
+  assert.equal(evalCat('7s 7d 2c 2h As'), P.HAND.TWO_PAIR);
+  assert.equal(evalCat('7s 7d 2c 3h As'), P.HAND.PAIR);
+  assert.equal(evalCat('7s 9d 2c 3h As'), P.HAND.HIGH_CARD);
+});
+
+test('compares hands within a category', () => {
+  const score = (s) => P.evaluate(cards(s)).score;
+  assert.ok(score('6s 2d 3c 4h 5s') > score('As 2d 3c 4h 5s')); // six-high beats the wheel
+  assert.ok(score('As Ad Kc 7h 2s') > score('As Ad Qc Jh Ts'));
+  assert.ok(score('Kc Kd Kh 2s 2c') > score('Qc Qd Qh As Ac'));
+  assert.equal(score('Ac Kc 9c 7c 5c 2c'), score('Ac Kc 9c 7c 5c 3d'));
+});
+
+test('classifies made hands from the hole cards point of view', () => {
+  assert.equal(classify('Ah Ad', 'Kc 7d 2s').made, 'overpair');
+  assert.equal(classify('Kh Qd', 'Kc 7d 2s').made, 'top-pair');
+  assert.equal(classify('7h 6h', 'Kc 7d 2s').made, 'middle-pair');
+  assert.equal(classify('2h 3h', 'Kc 7d 2s').made, 'weak-pair');
+  assert.equal(classify('9h 9d', 'Kc 7d 2s').made, 'pp-below-top');
+  assert.equal(classify('7h 7s', 'Kc 7d 2s').made, 'set');
+  assert.equal(classify('Kh 7h', 'Kc 7d 2s').made, 'two-pair');
+  assert.equal(classify('Ah 3h', 'Kc 7d 2s').made, 'ace-high');
+  assert.equal(classify('Qh Jh', 'Kc 7d 2s').made, 'no-made-hand');
+  assert.equal(classify('Kh Qd', 'Kc Kd 2s').made, 'trips');
+  assert.equal(classify('7h 6d', 'Kc Kd 7s').made, 'middle-pair'); // board pair doesn't count
+  assert.equal(classify('Kh 7d', 'Kc Kd 7s').made, 'full-house');
+  assert.equal(classify('5h 4h', '3c 2d As').made, 'straight');
+  assert.equal(classify('Ah 4h', 'Kh 7h 2h').made, 'flush');
+});
+
+test('classifies draws', () => {
+  assert.deepEqual(classify('Ah 5h', 'Kh 7h 2c').draws.sort(), ['flush-draw', 'nut-flush-draw']);
+  assert.deepEqual(classify('Qh 5h', 'Kh 7h 2c').draws, ['flush-draw']);
+  assert.deepEqual(classify('9c 8d', '7s 6h 2c').draws, ['oesd', 'overcards']);
+  assert.deepEqual(classify('9c 5d', '7s 6h 2c').draws, ['gutshot']);
+  assert.deepEqual(classify('9c 5d', '7c 6h Kc').draws, ['backdoor-flush-draw', 'gutshot']);
+  assert.ok(classify('9h 8h', '7h 6c 2h').draws.includes('combo-draw'));
+  assert.deepEqual(classify('Ad Qs', 'Jh 7c 2s').draws, ['overcards']);
+  // A double gutshot (6 or T here) counts as an 8-out straight draw.
+  assert.deepEqual(classify('9c 7d', 'Js 5h 8c 2d').draws, ['oesd']);
+  assert.deepEqual(classify('Qh Td', 'Kc 9s 2d').draws.includes('oesd'), false);
+  // No draws once the river is out.
+  assert.deepEqual(classify('Ah 5h', 'Kh 7h 2c 3d 9s').draws, []);
+});
+
+test('analyzeBoard counts every combo exactly once per made category', () => {
+  const flop = P.analyzeBoard(cards('Kc 7d 2s'));
+  assert.equal(flop.total, 1176);
+  const madeTotal = P.CATEGORIES.filter((c) => c.group === 'made').reduce((n, c) => n + flop.counts[c.id], 0);
+  assert.equal(madeTotal, 1176);
+  assert.equal(flop.counts.set, 9);
+  assert.equal(flop.counts.overpair, 6);
+  assert.equal(flop.counts['two-pair'], 27);
+  assert.equal(P.analyzeBoard(cards('Kc 7d 2s 3h')).total, 1128);
+  assert.equal(P.analyzeBoard(cards('Kc 7d 2s 3h 9c')).total, 1081);
+});
+
+test('drawCards never returns excluded or duplicate cards', () => {
+  const exclude = cards('As Ks Qs');
+  for (let i = 0; i < 200; i++) {
+    const drawn = P.drawCards(5, exclude);
+    assert.equal(new Set(drawn).size, 5);
+    for (const c of drawn) assert.ok(!exclude.includes(c));
+  }
+});
