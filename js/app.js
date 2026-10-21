@@ -542,7 +542,7 @@
       tab.classList.toggle('active', on);
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
     }
-    $('game-note').textContent = GAME_NOTES[state.game];
+    $('game-note').innerHTML = '<strong>' + game().name + ':</strong> ' + GAME_NOTES[state.game];
     $('check-text').placeholder = game().holeCards === 5 ? 'e.g. As Ks Qd Jd 9c' : 'e.g. As Ks Qd Jd';
     $('grid-panel').hidden = isOmaha();
     $('omaha-panel').hidden = !isOmaha();

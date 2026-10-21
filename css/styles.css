@@ -280,11 +280,6 @@ tr.on .bar { opacity: 1; }
 .examples { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--panel-border); }
 .examples-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
 .examples select { max-width: 100%; min-width: 0; }
-.game-tabs .short { display: none; }
-@media (max-width: 560px) {
-  .game-tabs .long { display: none; }
-  .game-tabs .short { display: inline; }
-}
 body.busy .layout { opacity: 0.45; pointer-events: none; transition: opacity 0.15s; }
 body.busy { cursor: progress; }
 @media (max-width: 560px) {
