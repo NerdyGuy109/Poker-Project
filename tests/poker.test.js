@@ -328,3 +328,29 @@ test('every tell has complete guide content', () => {
   }
   assert.ok(tells.some((t) => t.side === 'strong') && tells.some((t) => t.side === 'weak'));
 });
+
+test('poker math helpers', () => {
+  const M = require('../js/mathnotes.js');
+  const half = M.potOdds(100, 50);
+  assert.equal(half.ratio, 3);
+  assert.equal(half.equity, 0.25);
+  assert.equal(half.foldNeeded, 1 / 3);
+  assert.equal(half.mdf, 2 / 3);
+  assert.equal(M.potOdds(100, 100).equity, 1 / 3);
+  // Nine outs: 19.1% on the turn, 35.0% by the river.
+  assert.equal(M.outsEquity(9).turn.toFixed(3), '0.191');
+  assert.equal(M.outsEquity(9).turnAndRiver.toFixed(3), '0.350');
+  assert.equal(M.spr(97.5, 5.5).toFixed(1), '17.7');
+  const d = M.stackDepth({ stack: 24000, sb: 500, bb: 1000, ante: 1000, players: 9, bbAnte: true });
+  assert.equal(d.bbs, 24);
+  assert.equal(d.m, 9.6);
+  assert.ok(Math.abs(d.effectiveM - 8.64) < 1e-9);
+  assert.equal(M.stackDepth({ stack: 9000, sb: 50, bb: 100, ante: 10, players: 9, bbAnte: false }).orbit, 240);
+  // Geometric sizing: SPR 4 over two streets is pot-sized twice; the plan ends exactly all in.
+  assert.ok(Math.abs(M.geometricFraction(10, 40, 2) - 1) < 1e-12);
+  assert.equal(Math.round(M.geometricFraction(1, 4, 3) * 100), 54);
+  const plan = M.geometricPlan(10, 45, 3);
+  assert.ok(Math.abs(plan.rows[2].stackAfter) < 1e-9);
+  const f = plan.fraction;
+  plan.rows.forEach((r) => assert.ok(Math.abs(r.bet / r.pot - f) < 1e-9));
+});

@@ -68,6 +68,18 @@ Switch to **Tells** for a guide to live-poker body language. These are clues, no
 
 The guide draws on Mike Caro's *Book of Poker Tells*, Joe Navarro's *Read 'Em and Reap*, Zachary Elwood's *Reading Poker Tells*, and Slepian et al. (2013), who found arm movements revealed hand strength better than faces.
 
+## Poker math
+
+Switch to **Math** for notes, live calculators and charts:
+
+- **Pot odds & break-even equity:**
+  - calculator: pot and bet in; pot odds, equity needed to call, folds a bluff needs, and minimum defense frequency out
+  - chart and table of what each bet size (25%–200% pot) asks of both players
+  - exact outs-to-equity table (1–20 outs) next to the rule of 2 and 4
+- **Stack-to-pot ratio:** SPR calculator with what each SPR range means for stacking off, plus typical SPRs for common 100bb cash-game spots.
+- **Stack size in big blinds and M:** enter stack, blinds, ante (or big-blind ante) and players to get big blinds, M, effective M, and the matching Harrington zone and big-blind strategy band.
+- **Geometric bet sizing:** the same-fraction-every-street sizing that gets stacks in by the river. Calculator gives the fraction and a street-by-street plan, with a chart and table by SPR.
+
 ## Hand groups
 
 **Made hands:** every combo is in exactly one of these. Straight flush, quads, full house, flush and straight come from the best 5-card hand. Weaker hands are judged only by what the hole cards add:
@@ -104,5 +116,6 @@ If a hand is in more than one highlighted group, it takes the color of the first
 - `index.html`, `css/styles.css`: the page
 - `js/poker.js`: cards, hand evaluators, hold'em and Omaha classifiers, range analysis, equity calculator, runout tree (no DOM; also loads in Node)
 - `js/tells.js`: tells guide content and the player notebook
+- `js/mathnotes.js`: poker math notes, calculators and charts
 - `js/app.js`: UI
 - `tests/`: unit tests, run with `npm test` (Node 18+)
