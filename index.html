@@ -14,7 +14,7 @@
 
   <main>
     <div class="toolbar">
-      <nav class="game-tabs" role="tablist" aria-label="Game">
+      <nav class="game-tabs" id="game-tabs" role="tablist" aria-label="Game">
         <button type="button" role="tab" data-game="nlhe" title="No-limit hold&rsquo;em">NLHE</button>
         <button type="button" role="tab" data-game="plo" title="Pot-limit Omaha">PLO</button>
         <button type="button" role="tab" data-game="plo8" title="PLO hi-lo (8 or better)">PLO8</button>
@@ -25,11 +25,12 @@
         <button type="button" role="tab" data-view="range">Hand groups</button>
         <button type="button" role="tab" data-view="equity">Equity</button>
         <button type="button" role="tab" data-view="runouts">Runouts</button>
+        <button type="button" role="tab" data-view="tells">Tells</button>
       </nav>
     </div>
     <p class="game-note" id="game-note"></p>
 
-    <section class="panel board-panel" aria-labelledby="board-heading">
+    <section class="panel board-panel" id="board-panel" aria-labelledby="board-heading">
       <h2 id="board-heading" class="visually-hidden">Community cards</h2>
       <div class="board">
         <div class="street">
@@ -112,6 +113,8 @@
       <div id="runout-body"></div>
     </section>
 
+    <section class="panel tells-panel" id="tells-panel" hidden></section>
+
     <div class="layout" id="range-layout">
       <section class="panel grid-panel" id="grid-panel" aria-labelledby="grid-heading">
         <div class="panel-head">
@@ -183,6 +186,7 @@
   </dialog>
 
   <script src="js/poker.js"></script>
+  <script src="js/tells.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

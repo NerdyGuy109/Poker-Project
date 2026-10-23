@@ -56,6 +56,18 @@ Switch to **Runouts** to see how the next cards could change the board, with the
 
 Chances are counted from the cards not on the board; players' hole cards aren't removed.
 
+## Tells
+
+Switch to **Tells** for a guide to live-poker body language. These are clues, not proof.
+
+- **How to use tells:** baseline first, look for clusters, trust involuntary signals over acted ones, confirm at showdown, and use tells as a tiebreaker.
+- **Freeze, flight, fight… or comfort:** what each stress response looks like at the table and what it usually suggests.
+- **Baseline checklist:** what to watch while a player isn't in a hand.
+- **Strength vs weakness:** each tell has what it looks like, why it works, when it misleads, and a 1–3 reliability rating. Filter by eyes, face, hands and chips, body, voice, or timing and acting.
+- **Player notebook:** add players, write baseline notes, and log each tell when a showdown reveals whether they were strong or weak. After three or more sightings, a tell that matched the same way at least 75% of the time is marked reliable for that player. Saved in this browser only.
+
+The guide draws on Mike Caro's *Book of Poker Tells*, Joe Navarro's *Read 'Em and Reap*, Zachary Elwood's *Reading Poker Tells*, and Slepian et al. (2013), who found arm movements revealed hand strength better than faces.
+
 ## Hand groups
 
 **Made hands:** every combo is in exactly one of these. Straight flush, quads, full house, flush and straight come from the best 5-card hand. Weaker hands are judged only by what the hole cards add:
@@ -91,5 +103,6 @@ If a hand is in more than one highlighted group, it takes the color of the first
 
 - `index.html`, `css/styles.css`: the page
 - `js/poker.js`: cards, hand evaluators, hold'em and Omaha classifiers, range analysis, equity calculator, runout tree (no DOM; also loads in Node)
+- `js/tells.js`: tells guide content and the player notebook
 - `js/app.js`: UI
 - `tests/`: unit tests, run with `npm test` (Node 18+)

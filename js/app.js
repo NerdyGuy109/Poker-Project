@@ -55,7 +55,7 @@
       };
     }
     if (P.GAMES[saved.game]) state.game = saved.game;
-    if (saved.view === 'equity' || saved.view === 'runouts') state.view = saved.view;
+    if (['equity', 'runouts', 'tells'].includes(saved.view)) state.view = saved.view;
     state.priorityGroup = ['made', 'draw', 'low'].includes(saved.priorityGroup) ? saved.priorityGroup
       : saved.drawsFirst ? 'draw' : 'made';
     const t = saved.texture || {};
@@ -580,6 +580,13 @@
     $('range-layout').hidden = state.view !== 'range';
     $('equity-panel').hidden = state.view !== 'equity';
     $('runout-panel').hidden = state.view !== 'runouts';
+    // Tells don't depend on the game or the board.
+    const tells = state.view === 'tells';
+    $('tells-panel').hidden = !tells;
+    $('board-panel').hidden = tells;
+    $('game-note').hidden = tells;
+    $('game-tabs').hidden = tells;
+    if (tells && !$('tells-panel').hasChildNodes()) window.Tells.render($('tells-panel'));
     $('grid-panel').hidden = isOmaha();
     $('omaha-panel').hidden = !isOmaha();
     const lowOpt = $('color-priority').querySelector('option[value="low"]');

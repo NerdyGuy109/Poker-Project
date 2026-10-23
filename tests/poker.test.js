@@ -312,3 +312,19 @@ test('flopTextureOdds matches the known flop texture frequencies', () => {
   assert.equal(count(null, 'trips'), 52);
   assert.equal(count('rainbow'), 8788);
 });
+
+test('every tell has complete guide content', () => {
+  const vm = require('node:vm');
+  const fs = require('node:fs');
+  const sandbox = { window: {} };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../js/tells.js'), 'utf8'), sandbox);
+  const tells = sandbox.window.Tells.TELLS;
+  assert.ok(tells.length >= 10);
+  assert.equal(new Set(tells.map((t) => t.id)).size, tells.length);
+  for (const t of tells) {
+    assert.ok(['strong', 'weak'].includes(t.side), t.id);
+    assert.ok([1, 2, 3].includes(t.reliability), t.id);
+    for (const key of ['title', 'look', 'why', 'caveat', 'area']) assert.ok(t[key], t.id + ' ' + key);
+  }
+  assert.ok(tells.some((t) => t.side === 'strong') && tells.some((t) => t.side === 'weak'));
+});
