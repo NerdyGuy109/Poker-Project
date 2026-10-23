@@ -24,6 +24,7 @@
       <nav class="game-tabs view-tabs" role="tablist" aria-label="View">
         <button type="button" role="tab" data-view="range">Hand groups</button>
         <button type="button" role="tab" data-view="equity">Equity</button>
+        <button type="button" role="tab" data-view="runouts">Runouts</button>
       </nav>
     </div>
     <p class="game-note" id="game-note"></p>
@@ -101,6 +102,14 @@
       </div>
       <div class="equity-progress" id="equity-progress" hidden><span id="equity-progress-bar"></span></div>
       <p class="equity-status" id="equity-status" aria-live="polite"></p>
+    </section>
+
+    <section class="panel runout-panel" id="runout-panel" aria-labelledby="runout-heading" hidden>
+      <div class="panel-head">
+        <h2 id="runout-heading">Runout tree</h2>
+        <span class="hint" id="runout-hint"></span>
+      </div>
+      <div id="runout-body"></div>
     </section>
 
     <div class="layout" id="range-layout">

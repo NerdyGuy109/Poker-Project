@@ -38,6 +38,18 @@ Switch to **Equity** (top right) to compare 2–6 players on the current board. 
 - **Results:** equity (your average share of the pot) with win and tie rates. For PLO8 and Big O the pot splits between the best high and the best qualifying low (a high hand scoops when there's no low), and the results show scoop %, *wins high* and *wins low*.
 - Results update by themselves when the board changes.
 
+## Runout tree
+
+Switch to **Runouts** to see how the next cards could change the board, with the exact chance of each.
+
+- **Branches:** on a flop, each branch groups the turn cards that change the board the same way: *Pairs the board*, *Four-flush*, *Flush possible*, *Straight possible*, *Four to a straight*, *Second pair* / *Trips* / *Full house on board*, *Overcard*, *Flush draw arrives*, and (in PLO8 / Big O) *Low now possible*, or *Blank* when nothing changes. A card that does two things at once gets both labels, e.g. *Four-flush + Straight possible*, so the branches always add up to 100%.
+- **River level:** open a turn branch to see the river branches that follow it, with the chance given that turn and the overall chance.
+- **Single-change totals:** the line at the top gives each change's total chance on its own (e.g. *Pairs the board 18.4%*).
+- **Dealing from the tree:** click any card in a branch to deal it. On the turn, the tree shows the river cards.
+- **Preflop:** with an empty board it shows how often each flop texture comes up (e.g. monotone 5.2%, paired 16.9%).
+
+Chances are counted from the cards not on the board; players' hole cards aren't removed.
+
 ## Hand groups
 
 **Made hands:** every combo is in exactly one of these. Straight flush, quads, full house, flush and straight come from the best 5-card hand. Weaker hands are judged only by what the hole cards add:
@@ -72,6 +84,6 @@ If a hand is in more than one highlighted group, it takes the color of the first
 ## Project layout
 
 - `index.html`, `css/styles.css`: the page
-- `js/poker.js`: cards, hand evaluators, hold'em and Omaha classifiers, range analysis, equity calculator (no DOM; also loads in Node)
+- `js/poker.js`: cards, hand evaluators, hold'em and Omaha classifiers, range analysis, equity calculator, runout tree (no DOM; also loads in Node)
 - `js/app.js`: UI
 - `tests/`: unit tests, run with `npm test` (Node 18+)

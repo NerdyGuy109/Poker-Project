@@ -259,3 +259,52 @@ test('createEquityJob rejects bad input', () => {
   assert.throws(() => P.createEquityJob([cards('As Ks'), cards('As Qd')], [], 'nlhe'), /twice/);
   assert.throws(() => P.createEquityJob([cards('As Ks'), cards('Qd Qc')], [], 'plo'), /exactly 4/);
 });
+
+test('boardChangeTags describes what a new card does to the board', () => {
+  const tags = (board, card, hiLo) => P.boardChangeTags(cards(board), P.parseCard(card), hiLo);
+  assert.deepEqual(tags('Ah Kh 7h', '2c'), ['blank']);
+  assert.deepEqual(tags('Ah Kh 7h', 'Qh'), ['flush4', 'straight3']);
+  assert.deepEqual(tags('Ah Kh 7h', '7c'), ['pair']);
+  assert.deepEqual(tags('Ah Kh 7h 7c', 'Kd'), ['two-pair']);
+  assert.deepEqual(tags('Ah Kh 7h 7c', '7d'), ['trips']);
+  assert.deepEqual(tags('Ah Kh 7h 7c', 'Kd').includes('full-house'), false);
+  assert.deepEqual(tags('Ah 7h 7c 7d', 'Ac'), ['full-house']);
+  assert.deepEqual(tags('9c 4d 2s', 'Ks'), ['flush-draw', 'overcard']);
+  assert.deepEqual(tags('9c 4d 2s 8h', 'Kh'), ['overcard']); // no flush draw on the river
+  assert.deepEqual(tags('9c 8d 2s', '7h'), ['straight3']);
+  assert.deepEqual(tags('9c 8d 7s', '6h'), ['straight4']);
+  assert.ok(tags('Kc 7d 2s', '5h', true).includes('low'));
+  assert.ok(!tags('Kc 7d 2s', '5h', false).includes('low'));
+});
+
+test('runoutTree branches add up and match simple card counting', () => {
+  const tree = P.runoutTree(cards('Ah Kh 7h'));
+  assert.equal(tree.street, 'turn');
+  assert.equal(tree.unseen, 49);
+  assert.equal(tree.groups.reduce((n, g) => n + g.count, 0), 49);
+  assert.equal(tree.tagTotals.pair, 9 / 49); // three each of A, K and 7
+  assert.equal(tree.tagTotals.flush4, 10 / 49); // the ten other hearts
+  let overall = 0;
+  for (const g of tree.groups) {
+    const given = g.river.reduce((n, r) => n + r.prob, 0);
+    assert.ok(Math.abs(given - 1) < 1e-9);
+    overall += g.river.reduce((n, r) => n + r.overall, 0);
+  }
+  assert.ok(Math.abs(overall - 1) < 1e-9);
+  const turn = P.runoutTree(cards('Ah Kh 7h 2c'));
+  assert.equal(turn.street, 'river');
+  assert.equal(turn.unseen, 48);
+  assert.equal(turn.groups[0].river, undefined);
+  assert.throws(() => P.runoutTree(cards('Ah Kh 7h 2c 3d')), /flop or a turn/);
+});
+
+test('flopTextureOdds matches the known flop texture frequencies', () => {
+  const odds = P.flopTextureOdds();
+  const count = (suits, pairing) => odds.filter((o) => (!suits || o.suits === suits) && (!pairing || o.pairing === pairing))
+    .reduce((n, o) => n + o.count, 0);
+  assert.equal(count(), 22100);
+  assert.equal(count('monotone'), 1144);
+  assert.equal(count(null, 'paired'), 3744);
+  assert.equal(count(null, 'trips'), 52);
+  assert.equal(count('rainbow'), 8788);
+});

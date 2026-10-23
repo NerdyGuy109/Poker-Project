@@ -55,7 +55,7 @@
       };
     }
     if (P.GAMES[saved.game]) state.game = saved.game;
-    if (saved.view === 'equity') state.view = 'equity';
+    if (saved.view === 'equity' || saved.view === 'runouts') state.view = saved.view;
     state.priorityGroup = ['made', 'draw', 'low'].includes(saved.priorityGroup) ? saved.priorityGroup
       : saved.drawsFirst ? 'draw' : 'made';
     const t = saved.texture || {};
@@ -205,6 +205,13 @@
     for (const opt of $('flop-pairing').options) opt.disabled = !P.textureIsPossible(state.texture.suits, opt.value);
 
     const street = state.river !== null ? 'River' : state.turn !== null ? 'Turn' : 'Flop';
+    if (state.view === 'runouts') {
+      const shown = boardCards().length;
+      $('summary').innerHTML = shown === 0 ? '<strong>Preflop</strong> &middot; how often each flop texture comes up'
+        : !flopComplete() ? '<strong>Partial flop</strong> &middot; pick all three flop cards for the runout tree'
+          : '<strong>' + street + '</strong> &middot; ' + (shown === 5 ? 'all board cards are out' : (52 - shown) + ' unseen cards');
+      return;
+    }
     if (state.view === 'equity') {
       const shown = boardCards().length;
       $('summary').innerHTML = shown === 0
@@ -572,6 +579,7 @@
     }
     $('range-layout').hidden = state.view !== 'range';
     $('equity-panel').hidden = state.view !== 'equity';
+    $('runout-panel').hidden = state.view !== 'runouts';
     $('grid-panel').hidden = isOmaha();
     $('omaha-panel').hidden = !isOmaha();
     const lowOpt = $('color-priority').querySelector('option[value="low"]');
@@ -721,6 +729,81 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Runout tree
+  // ---------------------------------------------------------------------------
+
+  // Branch colors by the kind of change that leads the branch's label.
+  const RUNOUT_COLORS = {
+    flush5: '#2f5bd8', flush4: '#3d7bff', flush3: '#6d9bff', 'flush-draw': '#9ab8ff',
+    straight5: '#0d9488', straight4: '#14b8a6', straight3: '#5eead4',
+    quads: '#c2410c', 'full-house': '#ea580c', trips: '#f97316', 'two-pair': '#fb923c', pair: '#fdba74',
+    low: '#e85dff', overcard: '#a78bfa', blank: '#9ca3af',
+  };
+  const runoutColor = (tags) => RUNOUT_COLORS[tags[0]];
+  const SUIT_TEXT = { monotone: 'Monotone', 'two-tone': 'Two-tone', rainbow: 'Rainbow' };
+  const PAIRING_TEXT = { unpaired: 'unpaired', paired: 'paired', trips: 'trips' };
+
+  function nodeHTML(label, color, prob, extra) {
+    return '<span class="node-bar"><span style="width:' + (100 * prob).toFixed(1) + '%;background:' + color + '"></span></span>' +
+      '<span class="node-label"><span class="swatch" style="background:' + color + '"></span>' + label + '</span>' +
+      '<span class="node-pct">' + pctFine(prob) + '</span>' + (extra ? '<span class="node-extra">' + extra + '</span>' : '');
+  }
+
+  // One decimal, or two for rare branches so they don't read "0.0%".
+  const pctFine = (x) => (x >= 0.001 || x === 0 ? (100 * x).toFixed(1) : (100 * x).toFixed(2)) + "%";
+
+  function renderRunouts() {
+    const body = $('runout-body');
+    const board = boardCards();
+
+    if (board.length === 0) {
+      $('runout-hint').textContent = 'Deal or pick a flop to see the turn and river tree.';
+      const odds = P.flopTextureOdds();
+      body.innerHTML = '<h3 class="runout-sub">Flop textures before the flop</h3><ul class="tree root">' + odds.map((o) =>
+        '<li><div class="node leaf">' + nodeHTML(SUIT_TEXT[o.suits] + ', ' + PAIRING_TEXT[o.pairing], '#6d9bff', o.prob,
+          o.count.toLocaleString() + ' of 22,100 flops') + '</div></li>').join('') + '</ul>';
+      return;
+    }
+    if (!flopComplete()) {
+      $('runout-hint').textContent = '';
+      body.innerHTML = '<p class="hint">Pick all three flop cards to see the runout tree.</p>';
+      return;
+    }
+    if (board.length === 5) {
+      $('runout-hint').textContent = '';
+      body.innerHTML = '<p class="hint">All five board cards are out. Clear the river (or the turn) to see what could have come.</p>';
+      return;
+    }
+
+    const tree = P.runoutTree(board, state.game);
+    const nextName = tree.street === 'turn' ? 'turn' : 'river';
+    $('runout-hint').textContent = 'Out of the ' + tree.unseen + ' unseen cards (players’ hole cards aren’t removed). ' +
+      'Click a card to deal it.';
+
+    const totals = P.RUNOUT_TAGS.filter((t) => tree.tagTotals[t.id] && t.id !== 'blank').map((t) =>
+      '<li><span class="swatch" style="background:' + RUNOUT_COLORS[t.id] + '"></span>' + t.name + ' <strong>' + pctFine(tree.tagTotals[t.id]) + '</strong></li>').join('');
+
+    const branches = tree.groups.map((g) => {
+      const cardsHTML = '<div class="node-cards">' + g.cards.map((c) =>
+        '<button type="button" class="pick" data-runout-card="' + c + '" title="Deal ' + P.cardToString(c) + ' as the ' + nextName + '">' +
+        cardHTML(c, true) + '</button>').join('') + '</div>';
+      const river = g.river ? '<ul class="tree">' + g.river.map((r) =>
+        '<li><div class="node leaf">' + nodeHTML(r.label, runoutColor(r.tags), r.prob, pctFine(r.overall) + ' overall') + '</div></li>').join('') + '</ul>' : '';
+      return '<li><details class="node"><summary>' +
+        nodeHTML(g.label, runoutColor(g.tags), g.prob, g.count + ' of ' + tree.unseen + ' cards') + '</summary>' +
+        cardsHTML + (river ? '<p class="runout-sub">Then on the river <span class="muted">(chance given this turn &middot; overall)</span></p>' + river : '') +
+        '</details></li>';
+    }).join('');
+
+    body.innerHTML =
+      '<div class="runout-totals"><span class="muted">Any ' + nextName + ' card that&hellip;</span><ul class="dist-legend">' + totals + '</ul></div>' +
+      '<p class="runout-root">' + (tree.street === 'turn' ? 'Flop' : 'Turn') + ' <span class="combo-cards">' +
+        board.map((c) => cardHTML(c, true)).join('') + '</span> &rarr; ' + nextName + ' cards:' +
+        (tree.street === 'turn' ? ' <button type="button" class="link" id="runout-expand">Expand all</button>' : '') + '</p>' +
+      '<ul class="tree root">' + branches + '</ul>';
+  }
+
+  // ---------------------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------------------
 
@@ -730,13 +813,14 @@
     $('board-text').value = boardCards().map(P.cardToString).join(' ');
     $('board-error').textContent = '';
     const token = ++updateToken;
-    if (state.view === 'equity') {
+    if (state.view !== 'range') {
       // The hand-group analysis isn't on screen, so skip it; it's redone when switching back.
       state.analysis = null;
       document.body.classList.remove('busy');
       renderGame();
       renderBoard();
-      if (state.equity.ran) runEquity();
+      if (state.view === 'equity' && state.equity.ran) runEquity();
+      if (state.view === 'runouts') renderRunouts();
       return;
     }
     // 5-card Omaha means ~2 million hands: show the new board first, then count.
@@ -838,6 +922,20 @@
       if (state.equity.ran) runEquity();
     });
     $('equity-run').addEventListener('click', runEquity);
+
+    $('runout-body').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-runout-card]');
+      if (card) {
+        setSlot(state.turn === null ? 'turn' : 'river', +card.dataset.runoutCard);
+        return;
+      }
+      if (e.target.id === 'runout-expand') {
+        const all = [...$('runout-body').querySelectorAll('details')];
+        const open = !all.every((d) => d.open);
+        for (const d of all) d.open = open;
+        e.target.textContent = open ? 'Collapse all' : 'Expand all';
+      }
+    });
     const players = $('equity-players');
     players.addEventListener('input', (e) => {
       const i = e.target.dataset.eqInput;

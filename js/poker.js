@@ -773,6 +773,145 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Runout tree: how each possible turn / river card changes the board
+  // ---------------------------------------------------------------------------
+
+  // Tags in display order. A card gets every tag that applies; cards with the same tags share a branch.
+  const RUNOUT_TAGS = [
+    { id: 'flush5', name: 'Five-flush on board' },
+    { id: 'flush4', name: 'Four-flush' },
+    { id: 'flush3', name: 'Flush possible' },
+    { id: 'flush-draw', name: 'Flush draw arrives' },
+    { id: 'straight5', name: 'Straight on board' },
+    { id: 'straight4', name: 'Four to a straight' },
+    { id: 'straight3', name: 'Straight possible' },
+    { id: 'quads', name: 'Quads on board' },
+    { id: 'full-house', name: 'Full house on board' },
+    { id: 'trips', name: 'Trips on board' },
+    { id: 'two-pair', name: 'Second pair on board' },
+    { id: 'pair', name: 'Pairs the board' },
+    { id: 'low', name: 'Low now possible' },
+    { id: 'overcard', name: 'Overcard' },
+    { id: 'blank', name: 'Blank' },
+  ];
+  const RUNOUT_TAG_NAMES = Object.fromEntries(RUNOUT_TAGS.map((t) => [t.id, t.name]));
+  const RUNOUT_TAG_ORDER = Object.fromEntries(RUNOUT_TAGS.map((t, i) => [t.id, i]));
+
+  // Most board ranks inside any five-rank straight window (aces play high and low).
+  function maxStraightWindow(board) {
+    let m = 0;
+    for (const c of board) m |= 1 << rankOf(c);
+    const ext = (m << 1) | ((m >> 12) & 1); // bit 0 = ace-low
+    let best = 0;
+    for (let lo = 0; lo <= 9; lo++) best = Math.max(best, popcount((ext >> lo) & 0x1f));
+    return best;
+  }
+
+  const distinctLowRanks = (board) => new Set(board.map((c) => lowValueOfRank(rankOf(c))).filter(Boolean)).size;
+
+  // Tags describing what adding `card` does to `board`.
+  function boardChangeTags(board, card, hiLo) {
+    const tags = [];
+    const after = board.concat([card]);
+    const finalCard = after.length === 5;
+
+    const suitAfter = after.filter((c) => suitOf(c) === suitOf(card)).length;
+    if (suitAfter === 5) tags.push('flush5');
+    else if (suitAfter === 4) tags.push('flush4');
+    else if (suitAfter === 3) tags.push('flush3');
+    else if (suitAfter === 2 && !finalCard) tags.push('flush-draw');
+
+    const before = maxStraightWindow(board);
+    const now = maxStraightWindow(after);
+    if (now > before && now >= 3) tags.push(now >= 5 ? 'straight5' : now === 4 ? 'straight4' : 'straight3');
+
+    const counts = new Array(13).fill(0);
+    for (const c of after) counts[rankOf(c)]++;
+    const r = rankOf(card);
+    const pairsOnBoard = counts.filter((n) => n >= 2).length;
+    if (counts[r] === 4) tags.push('quads');
+    else if (counts[r] === 3) tags.push(counts.some((n, i) => i !== r && n >= 2) ? 'full-house' : 'trips');
+    else if (counts[r] === 2) tags.push(counts.some((n, i) => i !== r && n >= 3) ? 'full-house' : pairsOnBoard >= 2 ? 'two-pair' : 'pair');
+    else if (board.every((c) => rankOf(c) < r)) tags.push('overcard');
+
+    if (hiLo && distinctLowRanks(board) < 3 && distinctLowRanks(after) >= 3) tags.push('low');
+
+    if (!tags.length) tags.push('blank');
+    return tags.sort((a, b) => RUNOUT_TAG_ORDER[a] - RUNOUT_TAG_ORDER[b]);
+  }
+
+  const tagKey = (tags) => tags.join('+');
+  const tagLabel = (tags) => tags.map((t) => RUNOUT_TAG_NAMES[t]).join(' + ');
+
+  // Groups the next cards for a board by what they change.
+  // Returns { unseen, groups: [{ key, tags, label, cards, count, prob }], tagTotals: { tag: prob } }.
+  function nextCardGroups(board, hiLo) {
+    const dead = new Set(board);
+    const byKey = new Map();
+    const tagCounts = {};
+    let unseen = 0;
+    for (let c = 51; c >= 0; c--) {
+      if (dead.has(c)) continue;
+      unseen++;
+      const tags = boardChangeTags(board, c, hiLo);
+      const key = tagKey(tags);
+      if (!byKey.has(key)) byKey.set(key, { key, tags, label: tagLabel(tags), cards: [] });
+      byKey.get(key).cards.push(c);
+      for (const t of tags) tagCounts[t] = (tagCounts[t] || 0) + 1;
+    }
+    const groups = [...byKey.values()].map((g) => ({ ...g, count: g.cards.length, prob: g.cards.length / unseen }));
+    groups.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    const tagTotals = {};
+    for (const t of RUNOUT_TAGS) if (tagCounts[t.id]) tagTotals[t.id] = tagCounts[t.id] / unseen;
+    return { unseen, groups, tagTotals };
+  }
+
+  // The runout tree for a flop or turn board. On a flop each turn branch also gets the river
+  // branches that follow it, as probabilities given that turn branch (`prob`) and overall (`overall`).
+  function runoutTree(board, gameId) {
+    const hiLo = !!(GAMES[gameId || 'nlhe'].hiLo);
+    if (board.length < 3 || board.length > 4) throw new Error('The runout tree needs a flop or a turn.');
+    const next = nextCardGroups(board, hiLo);
+    if (board.length === 3) {
+      for (const g of next.groups) {
+        const byKey = new Map();
+        let total = 0;
+        for (const turn of g.cards) {
+          const river = nextCardGroups(board.concat([turn]), hiLo);
+          for (const rg of river.groups) {
+            if (!byKey.has(rg.key)) byKey.set(rg.key, { key: rg.key, tags: rg.tags, label: rg.label, count: 0 });
+            byKey.get(rg.key).count += rg.count;
+          }
+          total += river.unseen;
+        }
+        g.river = [...byKey.values()].map((rg) => ({ ...rg, prob: rg.count / total, overall: g.prob * rg.count / total }));
+        g.river.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+      }
+    }
+    return { street: board.length === 3 ? 'turn' : 'river', ...next };
+  }
+
+  // Before the flop: how often each flop texture comes up (all 22,100 flops).
+  function flopTextureOdds() {
+    const counts = new Map();
+    let total = 0;
+    for (let a = 0; a < 52; a++) {
+      for (let b = a + 1; b < 52; b++) {
+        for (let c = b + 1; c < 52; c++) {
+          const t = flopTexture([a, b, c]);
+          const key = t.suits + '|' + t.pairing;
+          counts.set(key, (counts.get(key) || 0) + 1);
+          total++;
+        }
+      }
+    }
+    return [...counts.entries()].map(([key, count]) => {
+      const [suits, pairing] = key.split('|');
+      return { suits, pairing, count, prob: count / total };
+    }).sort((x, y) => y.count - x.count);
+  }
+
+  // ---------------------------------------------------------------------------
   // Equity calculator
   // ---------------------------------------------------------------------------
 
@@ -1065,6 +1204,10 @@
     parseCardList,
     scoreCards,
     createEquityJob,
+    RUNOUT_TAGS,
+    boardChangeTags,
+    runoutTree,
+    flopTextureOdds,
     rankOf,
     suitOf,
     makeCard,
