@@ -734,7 +734,7 @@
 
   // Branch colors by the kind of change that leads the branch's label.
   const RUNOUT_COLORS = {
-    flush5: '#2f5bd8', flush4: '#3d7bff', flush3: '#6d9bff', 'flush-draw': '#9ab8ff',
+    flush5: '#2f5bd8', flush4: '#3d7bff', flush3: '#6d9bff', 'flush-draw': '#9ab8ff', 'flush-draw-2': '#b9cdff',
     straight5: '#0d9488', straight4: '#14b8a6', straight3: '#5eead4',
     quads: '#c2410c', 'full-house': '#ea580c', trips: '#f97316', 'two-pair': '#fb923c', pair: '#fdba74',
     low: '#e85dff', overcard: '#a78bfa', blank: '#9ca3af',
@@ -743,10 +743,22 @@
   const SUIT_TEXT = { monotone: 'Monotone', 'two-tone': 'Two-tone', rainbow: 'Rainbow' };
   const PAIRING_TEXT = { unpaired: 'unpaired', paired: 'paired', trips: 'trips' };
 
-  function nodeHTML(label, color, prob, extra) {
+  const TAG_ABOUT = Object.fromEntries(P.RUNOUT_TAGS.map((t) => [t.id, t.about]));
+  const aboutTags = (tags) => tags.map((t) => TAG_ABOUT[t]).join(' ');
+
+  function nodeHTML(label, color, prob, extra, about) {
     return '<span class="node-bar"><span style="width:' + (100 * prob).toFixed(1) + '%;background:' + color + '"></span></span>' +
-      '<span class="node-label"><span class="swatch" style="background:' + color + '"></span>' + label + '</span>' +
+      '<span class="node-label"' + (about ? ' title="' + about + '"' : '') + '><span class="swatch" style="background:' + color + '"></span>' + label + '</span>' +
       '<span class="node-pct">' + pctFine(prob) + '</span>' + (extra ? '<span class="node-extra">' + extra + '</span>' : '');
+  }
+
+  // Explains every label, so names like "Second flush draw" aren't guesswork.
+  function legendHTML() {
+    const hiLo = !!game().hiLo;
+    return '<details class="runout-legend"><summary>What the labels mean</summary><dl>' +
+      P.RUNOUT_TAGS.filter((t) => hiLo || t.id !== 'low').map((t) =>
+        '<dt><span class="swatch" style="background:' + RUNOUT_COLORS[t.id] + '"></span>' + t.name + '</dt><dd>' + t.about + '</dd>').join('') +
+      '</dl><p class="hint">A card that does several things gets all its labels joined with &ldquo;+&rdquo;, so the branches never overlap and add up to 100%.</p></details>';
   }
 
   // One decimal, or two for rare branches so they don't read "0.0%".
@@ -788,9 +800,9 @@
         '<button type="button" class="pick" data-runout-card="' + c + '" title="Deal ' + P.cardToString(c) + ' as the ' + nextName + '">' +
         cardHTML(c, true) + '</button>').join('') + '</div>';
       const river = g.river ? '<ul class="tree">' + g.river.map((r) =>
-        '<li><div class="node leaf">' + nodeHTML(r.label, runoutColor(r.tags), r.prob, pctFine(r.overall) + ' overall') + '</div></li>').join('') + '</ul>' : '';
+        '<li><div class="node leaf">' + nodeHTML(r.label, runoutColor(r.tags), r.prob, pctFine(r.overall) + ' overall', aboutTags(r.tags)) + '</div></li>').join('') + '</ul>' : '';
       return '<li><details class="node"><summary>' +
-        nodeHTML(g.label, runoutColor(g.tags), g.prob, g.count + ' of ' + tree.unseen + ' cards') + '</summary>' +
+        nodeHTML(g.label, runoutColor(g.tags), g.prob, g.count + ' of ' + tree.unseen + ' cards', aboutTags(g.tags)) + '</summary>' +
         cardsHTML + (river ? '<p class="runout-sub">Then on the river <span class="muted">(chance given this turn &middot; overall)</span></p>' + river : '') +
         '</details></li>';
     }).join('');
@@ -800,7 +812,7 @@
       '<p class="runout-root">' + (tree.street === 'turn' ? 'Flop' : 'Turn') + ' <span class="combo-cards">' +
         board.map((c) => cardHTML(c, true)).join('') + '</span> &rarr; ' + nextName + ' cards:' +
         (tree.street === 'turn' ? ' <button type="button" class="link" id="runout-expand">Expand all</button>' : '') + '</p>' +
-      '<ul class="tree root">' + branches + '</ul>';
+      '<ul class="tree root">' + branches + '</ul>' + legendHTML();
   }
 
   // ---------------------------------------------------------------------------

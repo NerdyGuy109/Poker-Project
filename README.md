@@ -42,7 +42,13 @@ Switch to **Equity** (top right) to compare 2–6 players on the current board. 
 
 Switch to **Runouts** to see how the next cards could change the board, with the exact chance of each.
 
-- **Branches:** on a flop, each branch groups the turn cards that change the board the same way: *Pairs the board*, *Four-flush*, *Flush possible*, *Straight possible*, *Four to a straight*, *Second pair* / *Trips* / *Full house on board*, *Overcard*, *Flush draw arrives*, and (in PLO8 / Big O) *Low now possible*, or *Blank* when nothing changes. A card that does two things at once gets both labels, e.g. *Four-flush + Straight possible*, so the branches always add up to 100%.
+- **Branches:** on a flop, each branch groups the turn cards that change the board the same way. Labels describe the board, e.g.:
+  - flush: *Goes two-tone (new flush draw)* on a rainbow flop, *Second flush draw (2 of another suit)* on a two-tone flop, *Flush possible (3 of a suit)*, *Four-flush (4 of a suit)*
+  - straight: *Straight now possible*, *Four to a straight (one-card straight)*
+  - pairing: *Pairs the board*, *Second pair* / *Trips* / *Full house on board*
+  - other: *Overcard (new high card)*, *Low now possible* (PLO8 / Big O), or *Blank (no change)*
+
+  A card that does two things at once gets both labels joined with "+", so the branches always add up to 100%. Hover a label, or open **What the labels mean** under the tree, for a one-line explanation of each.
 - **River level:** open a turn branch to see the river branches that follow it, with the chance given that turn and the overall chance.
 - **Single-change totals:** the line at the top gives each change's total chance on its own (e.g. *Pairs the board 18.4%*).
 - **Dealing from the tree:** click any card in a branch to deal it. On the turn, the tree shows the river cards.

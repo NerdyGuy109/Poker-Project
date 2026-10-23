@@ -270,6 +270,10 @@ test('boardChangeTags describes what a new card does to the board', () => {
   assert.deepEqual(tags('Ah Kh 7h 7c', 'Kd').includes('full-house'), false);
   assert.deepEqual(tags('Ah 7h 7c 7d', 'Ac'), ['full-house']);
   assert.deepEqual(tags('9c 4d 2s', 'Ks'), ['flush-draw', 'overcard']);
+  // On a two-tone flop, two of a second suit is a second flush draw, not the first.
+  assert.deepEqual(tags('Ah Kh 7c', '2c'), ['flush-draw-2']);
+  assert.deepEqual(tags('Ah Kh 7c', '2h'), ['flush3']);
+  assert.deepEqual(tags('Ah Kh 7c', '2d'), ['blank']);
   assert.deepEqual(tags('9c 4d 2s 8h', 'Kh'), ['overcard']); // no flush draw on the river
   assert.deepEqual(tags('9c 8d 2s', '7h'), ['straight3']);
   assert.deepEqual(tags('9c 8d 7s', '6h'), ['straight4']);

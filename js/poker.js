@@ -777,22 +777,24 @@
   // ---------------------------------------------------------------------------
 
   // Tags in display order. A card gets every tag that applies; cards with the same tags share a branch.
+  // Names say what happens on the board; `about` explains it in a sentence.
   const RUNOUT_TAGS = [
-    { id: 'flush5', name: 'Five-flush on board' },
-    { id: 'flush4', name: 'Four-flush' },
-    { id: 'flush3', name: 'Flush possible' },
-    { id: 'flush-draw', name: 'Flush draw arrives' },
-    { id: 'straight5', name: 'Straight on board' },
-    { id: 'straight4', name: 'Four to a straight' },
-    { id: 'straight3', name: 'Straight possible' },
-    { id: 'quads', name: 'Quads on board' },
-    { id: 'full-house', name: 'Full house on board' },
-    { id: 'trips', name: 'Trips on board' },
-    { id: 'two-pair', name: 'Second pair on board' },
-    { id: 'pair', name: 'Pairs the board' },
-    { id: 'low', name: 'Low now possible' },
-    { id: 'overcard', name: 'Overcard' },
-    { id: 'blank', name: 'Blank' },
+    { id: 'flush5', name: 'Five-flush (5 of a suit)', about: 'All five board cards are one suit, so every player has at least that flush.' },
+    { id: 'flush4', name: 'Four-flush (4 of a suit)', about: 'Four board cards share a suit: any single card of that suit makes a flush.' },
+    { id: 'flush3', name: 'Flush possible (3 of a suit)', about: 'A third card of one suit: hands with two of that suit now have a flush.' },
+    { id: 'flush-draw', name: 'Goes two-tone (new flush draw)', about: 'No suit had two cards on the board before; now one does. Hands with two of that suit turn their backdoor flush draw into a real flush draw.' },
+    { id: 'flush-draw-2', name: 'Second flush draw (2 of another suit)', about: 'The board was already two-tone; this card makes two of a second suit, so a second flush draw appears (a backdoor draw in that suit becomes a real one).' },
+    { id: 'straight5', name: 'Straight on board', about: 'The five board cards make a straight by themselves.' },
+    { id: 'straight4', name: 'Four to a straight (one-card straight)', about: 'Four board cards fit in a five-card straight, so a single card can make a straight.' },
+    { id: 'straight3', name: 'Straight now possible', about: 'For the first time, three board cards fit in a five-card straight, so two hole cards can make one.' },
+    { id: 'quads', name: 'Quads on board', about: 'The fourth card of a rank: four of a kind on the board.' },
+    { id: 'full-house', name: 'Full house on board', about: 'The board itself now makes a full house.' },
+    { id: 'trips', name: 'Trips on board', about: 'Matches a pair on the board: three of a kind on the board.' },
+    { id: 'two-pair', name: 'Second pair on board', about: 'The board was already paired; this card pairs another rank.' },
+    { id: 'pair', name: 'Pairs the board', about: 'Matches the rank of a board card on an unpaired board.' },
+    { id: 'low', name: 'Low now possible (3 low cards)', about: 'Hi-lo only: the board now has three different cards 8 or lower, so a low can be made.' },
+    { id: 'overcard', name: 'Overcard (new high card)', about: 'Higher than every card already on the board.' },
+    { id: 'blank', name: 'Blank (no change)', about: 'Changes none of the above.' },
   ];
   const RUNOUT_TAG_NAMES = Object.fromEntries(RUNOUT_TAGS.map((t) => [t.id, t.name]));
   const RUNOUT_TAG_ORDER = Object.fromEntries(RUNOUT_TAGS.map((t, i) => [t.id, i]));
@@ -819,7 +821,10 @@
     if (suitAfter === 5) tags.push('flush5');
     else if (suitAfter === 4) tags.push('flush4');
     else if (suitAfter === 3) tags.push('flush3');
-    else if (suitAfter === 2 && !finalCard) tags.push('flush-draw');
+    else if (suitAfter === 2 && !finalCard) {
+      const alreadyTwoTone = [0, 1, 2, 3].some((st) => st !== suitOf(card) && board.filter((c) => suitOf(c) === st).length >= 2);
+      tags.push(alreadyTwoTone ? 'flush-draw-2' : 'flush-draw');
+    }
 
     const before = maxStraightWindow(board);
     const now = maxStraightWindow(after);
