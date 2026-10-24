@@ -530,3 +530,44 @@ body.busy { cursor: progress; }
   .view-tabs .long { display: none; }
   .view-tabs .short { display: inline; }
 }
+
+/* ---------- 2-7 draw games ---------- */
+
+.dg-rules { font-size: 0.92rem; margin: 0 0 4px; max-width: 820px; }
+.dg-input { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.dg-input input { font: inherit; font-size: 0.95rem; color: var(--text); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 7px; padding: 6px 9px; width: 230px; max-width: 100%; }
+.dg-error { color: #d0263a; text-align: left; margin: 0; }
+.dg-cards { display: flex; gap: 8px; margin: 12px 0 6px; flex-wrap: wrap; }
+.dg-card { padding: 0; background: none; border: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: transform 0.12s; }
+.dg-card:hover:not(:disabled) { background: none; transform: translateY(-2px); }
+.dg-card.discard .card { opacity: 0.35; transform: translateY(8px); }
+.dg-card .card { transition: opacity 0.12s, transform 0.12s; }
+.dg-card-tag { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+.dg-card.discard .dg-card-tag { color: #d0263a; margin-top: 8px; }
+.dg-desc { margin: 4px 0; font-size: 0.95rem; }
+.dg-choice { margin: 12px 0 8px; font-size: 0.95rem; }
+.dg-good { color: var(--accent); font-weight: 650; }
+.dg-table td, .dg-table th { padding-right: 16px; }
+.dg-table th .link { font-size: 0.75rem; color: var(--muted); padding: 0; }
+.dg-table th .link.active { color: var(--accent); text-decoration: underline; }
+.dg-table td.sorted { font-weight: 650; }
+.dg-table td.best { color: var(--accent); }
+.dg-table tbody tr[data-mask] { cursor: pointer; }
+.dg-table tbody tr[data-mask]:hover td { background: color-mix(in srgb, var(--cell-bg) 60%, transparent); }
+.dg-table tr.chosen td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.dg-bar-cell { width: 120px; }
+.dg-bar { display: block; height: 8px; border-radius: 4px; background: var(--series-1); }
+.dg-notes { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px 18px; font-size: 0.9rem; margin: 6px 0 0; max-width: 900px; }
+.dg-notes dt { font-weight: 650; }
+.dg-notes dd { margin: 0; }
+.dg-notes-head { margin: 18px 0 4px; font-size: 0.95rem; }
+@media (max-width: 640px) {
+  .dg-notes { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .dg-notes dd { margin-bottom: 10px; }
+  .dg-bar-cell { display: none; }
+  .dg-cards { gap: 5px; }
+}
+@media (max-width: 560px) {
+  .game-tabs#game-tabs { overflow-x: auto; scrollbar-width: none; }
+  .game-tabs#game-tabs button { flex: none; padding: 7px 9px; }
+}

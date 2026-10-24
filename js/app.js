@@ -26,6 +26,14 @@
   const catById = Object.fromEntries(P.CATEGORIES.map((c) => [c.id, c]));
   const game = () => P.GAMES[state.game];
   const isOmaha = () => state.game !== 'nlhe';
+  const isDraw = () => !!game().draw;
+  const BOARD_VIEWS = ['range', 'equity', 'runouts'];
+
+  // Draw games have no board: their Draw view replaces the board views (and back again).
+  function fixView() {
+    if (isDraw() && BOARD_VIEWS.includes(state.view)) state.view = 'draw';
+    else if (!isDraw() && state.view === 'draw') state.view = 'range';
+  }
   const catName = (id) => P.categoryName(id, state.game);
   const gameCategories = () => game().categoryIds.map((id) => catById[id]);
   const handWord = () => (isOmaha() ? 'hands' : 'combos');
@@ -35,6 +43,8 @@
     plo: 'Four hole cards; every hand must use exactly two of them with three board cards.',
     plo8: 'Four hole cards, exactly two used for each half. The pot splits between the best high and the best low (five different cards 8 or lower, aces low).',
     plo5: 'Five hole cards; every hand must still use exactly two of them with three board cards.',
+    '27sd': 'Five cards and one draw; the lowest hand wins, with aces high and straights and flushes counting against you.',
+    '27td': 'Five cards and three draws; the lowest hand wins, with aces high and straights and flushes counting against you.',
     bigo: 'Five hole cards, exactly two used for each half. Split pot like PLO8: best high and best low (five different cards 8 or lower, aces low).',
   };
 
@@ -55,7 +65,7 @@
       };
     }
     if (P.GAMES[saved.game]) state.game = saved.game;
-    if (['equity', 'runouts', 'tells', 'math'].includes(saved.view)) state.view = saved.view;
+    if (['equity', 'runouts', 'tells', 'math', 'draw'].includes(saved.view)) state.view = saved.view;
     state.priorityGroup = ['made', 'draw', 'low'].includes(saved.priorityGroup) ? saved.priorityGroup
       : saved.drawsFirst ? 'draw' : 'made';
     const t = saved.texture || {};
@@ -576,7 +586,12 @@
       const on = tab.dataset.view === state.view;
       tab.classList.toggle('active', on);
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (BOARD_VIEWS.includes(tab.dataset.view)) tab.hidden = isDraw();
+      if (tab.dataset.view === 'draw') tab.hidden = !isDraw();
     }
+    const draw = state.view === 'draw';
+    $('draw-panel').hidden = !draw;
+    if (draw) window.DrawGame.render($('draw-panel'), state.game);
     $('range-layout').hidden = state.view !== 'range';
     $('equity-panel').hidden = state.view !== 'equity';
     $('runout-panel').hidden = state.view !== 'runouts';
@@ -585,7 +600,7 @@
     const math = state.view === 'math';
     $('tells-panel').hidden = !tells;
     $('math-panel').hidden = !math;
-    $('board-panel').hidden = tells || math;
+    $('board-panel').hidden = tells || math || draw;
     $('game-note').hidden = tells || math;
     $('game-tabs').hidden = tells || math;
     if (tells && !$('tells-panel').hasChildNodes()) window.Tells.render($('tells-panel'));
@@ -922,6 +937,7 @@
         if (state.game === tab.dataset.game) return;
         state.game = tab.dataset.game;
         state.selectedCell = null;
+        fixView();
         saveSettings();
         renderEquityPlayers();
         update();
@@ -1037,6 +1053,7 @@
   }
 
   loadSettings();
+  fixView();
   renderEquityPlayers();
   bind();
   newFlop();

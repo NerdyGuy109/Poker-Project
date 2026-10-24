@@ -20,9 +20,12 @@
         <button type="button" role="tab" data-game="plo8" title="PLO hi-lo (8 or better)">PLO8</button>
         <button type="button" role="tab" data-game="plo5" title="5-card PLO">PLO5</button>
         <button type="button" role="tab" data-game="bigo" title="Big O (5-card hi-lo)">Big O</button>
+        <button type="button" role="tab" data-game="27sd" title="2-7 single draw">2-7 SD</button>
+        <button type="button" role="tab" data-game="27td" title="2-7 triple draw">2-7 TD</button>
       </nav>
       <nav class="game-tabs view-tabs" role="tablist" aria-label="View">
         <button type="button" role="tab" data-view="range"><span class="long">Hand groups</span><span class="short">Groups</span></button>
+        <button type="button" role="tab" data-view="draw" hidden>Draw</button>
         <button type="button" role="tab" data-view="equity">Equity</button>
         <button type="button" role="tab" data-view="runouts">Runouts</button>
         <button type="button" role="tab" data-view="tells">Tells</button>
@@ -114,6 +117,7 @@
       <div id="runout-body"></div>
     </section>
 
+    <section class="panel tells-panel draw-panel" id="draw-panel" hidden></section>
     <section class="panel tells-panel" id="tells-panel" hidden></section>
     <section class="panel tells-panel math-panel" id="math-panel" hidden></section>
 
@@ -188,6 +192,9 @@
   </dialog>
 
   <script src="js/poker.js"></script>
+  <script src="js/lowball.js"></script>
+  <script src="js/drawcharts.js"></script>
+  <script src="js/drawgame.js"></script>
   <script src="js/tells.js"></script>
   <script src="js/mathnotes.js"></script>
   <script src="js/app.js"></script>

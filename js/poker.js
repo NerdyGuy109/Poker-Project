@@ -276,6 +276,9 @@
       categoryIds: MADE_IDS.concat(['combo-draw', 'flush-draw', 'nut-flush-draw', 'wrap', 'oesd', 'gutshot', 'backdoor-flush-draw', 'nut-low', 'any-low', 'low-draw']),
       names: { oesd: 'Open-ended (5\u20138 straight outs)', gutshot: 'Gutshot (1\u20134 straight outs)' },
     },
+    // Draw games have no board, so none of the board analysis applies; js/lowball.js handles them.
+    '27sd': { id: '27sd', name: '2-7 single draw', short: '2-7 SD', holeCards: 5, draw: 1, categoryIds: [], names: {} },
+    '27td': { id: '27td', name: '2-7 triple draw', short: '2-7 TD', holeCards: 5, draw: 3, categoryIds: [], names: {} },
   };
 
   function categoryName(id, gameId) {

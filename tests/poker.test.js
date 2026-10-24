@@ -354,3 +354,55 @@ test('poker math helpers', () => {
   const f = plan.fraction;
   plan.rows.forEach((r) => assert.ok(Math.abs(r.bet / r.pot - f) < 1e-9));
 });
+
+const L = require('../js/lowball.js');
+
+test('2-7 lowball ranks hands with aces high and no wheel', () => {
+  const v = (s) => L.value27(cards(s));
+  assert.equal(L.lowTop(cards('7s 5d 4c 3h 2s')), 5);
+  assert.equal(L.describe27(cards('7s 5d 4c 3h 2s')).name, 'Number one (the nuts)');
+  assert.equal(L.lowTop(cards('As 2d 3c 4h 5s')), 12); // ace-high, not a straight
+  assert.equal(L.lowTop(cards('2s 3d 4c 5h 6s')), L.NOT_LOW); // straight
+  assert.equal(L.lowTop(cards('2s 4s 6s 8s 9s')), L.NOT_LOW); // flush
+  assert.equal(L.lowTop(cards('9s 9d 4c 3h 2s')), L.NOT_LOW); // pair
+  assert.ok(v('7s 5d 4c 3h 2s') < v('7s 6d 4c 3h 2s'));
+  assert.ok(v('7s 6d 5c 4h 2s') < v('8s 5d 4c 3h 2s'));
+  assert.ok(v('8s 5d 4c 3h 2s') < v('8s 6d 4c 3h 2s'));
+  assert.ok(v('As Kd Qc Jh 9s') < v('2s 2d 3c 4h 5s')); // any unpaired hand beats a pair
+  assert.ok(v('2s 2d 3c 4h 5s') < v('2s 3d 4c 5h 6s')); // a pair beats a straight
+  assert.ok(v('2s 3d 4c 5h 6s') < v('2s 4s 6s 8s 9s')); // a straight beats a flush
+});
+
+test('2-7 single draw odds are exact', () => {
+  // Drawing one to 7-4-3-2 (mixed suits): a 5 or 6 makes a 7, an 8 makes an 8, a 9 makes a 9.
+  const kept = cards('7s 4d 3c 2h');
+  const deck = [];
+  for (let c = 0; c < 52; c++) if (!kept.includes(c)) deck.push(c);
+  const o = L.singleDrawOdds(kept, deck);
+  assert.equal(o['7'], 8 / 48);
+  assert.equal(o['8'], 12 / 48);
+  assert.equal(o['9'], 16 / 48);
+  // Keeping a pair or a face card can never get there.
+  assert.equal(L.singleDrawOdds(cards('7s 7d 3c 2h'), deck)['T'], 0);
+  // A dealt hand: drawing one to 8-6-5-3 from 47 unseen cards.
+  const options = L.analyzeHand(cards('8s 6d 5c 3h Ks'), 1);
+  assert.equal(options.length, 32);
+  const drawOne = options.find((x) => x.kept.length === 4 && !x.kept.includes(P.parseCard('Ks')));
+  assert.equal(drawOne.probs['8'], 12 / 47); // a deuce, four or seven
+  const pat = options.find((x) => x.draw === 0);
+  assert.equal(pat.probs['T'], 0); // king-high
+});
+
+test('2-7 triple draw simulation and policy', () => {
+  const hand = cards('7s 6d 5c 4h 3s'); // a straight: break the top card
+  assert.deepEqual(L.policyKeep(hand, 5).map((i) => P.cardToString(hand[i])).sort(), ['3s', '4h', '5c', '6d']);
+  const kept = cards('7s 5d 3c 2h');
+  const deck = [];
+  for (let c = 0; c < 52; c++) if (!kept.includes(c)) deck.push(c);
+  // Twelve outs (4, 6, 8) per draw over three draws: about 1 - (36/48)^3 = 58%.
+  const p = L.multiDrawOdds(kept, deck, 3, 6, 20000);
+  assert.ok(Math.abs(p - (1 - Math.pow(36 / 48, 3))) < 0.02, String(p));
+  const charts = require('../js/drawcharts.js');
+  assert.equal(charts.entries.length, 246);
+  assert.ok(charts.entries.every((e) => e.triple['T'] >= e.triple['7'] && e.single['T'] >= e.single['7']));
+});
