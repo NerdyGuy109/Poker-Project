@@ -42,6 +42,15 @@ Picking **2-7 SD** or **2-7 TD** swaps the board views for a **Draw** view (Tell
 Switch to **Equity** (top right) to compare 2–6 players on the current board. Clear the board for preflop.
 
 - **Hands:** type each player's hand (`As Kd`, or 4/5 cards for Omaha games), press *Random*, or leave it blank so that player gets a fresh random hand on every runout. Dealing board cards in this view never uses cards a player holds.
+- **Ranges (hold'em):** type a range instead of a hand, mixing any of these forms:
+  - pairs: `JJ+`, `22-55`
+  - suited or offsuit: `ATo+`, `A7s+`, `A5s-A2s`, `KQo`
+  - both suits: `AJ+`, `KQ`
+  - connector runs: `T9s-65s`
+  - exact combos: `AsKs`
+  - `any`
+
+  The line under the box shows the combo count, and how many are left after the board and other players' cards remove some. **Grid** opens a 13×13 picker (click or drag across hands, with quick-add buttons for pairs, suited aces, broadways and suited connectors) that writes the range back in short form. Every valid deal is equally likely: results are exact when small enough (often on the turn or river), otherwise simulated.
 - **Exact or simulated:**
   - When every hand is known and the work is small enough, every possible runout is checked, for example hold'em preflop heads-up (1,712,304 runouts) or any flop or turn spot.
   - Otherwise (random hands, or Omaha preflop) it runs a Monte Carlo simulation for up to ~2.5 seconds and shows the margin of error.

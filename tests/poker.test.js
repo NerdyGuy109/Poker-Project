@@ -406,3 +406,50 @@ test('2-7 triple draw simulation and policy', () => {
   assert.equal(charts.entries.length, 246);
   assert.ok(charts.entries.every((e) => e.triple['T'] >= e.triple['7'] && e.single['T'] >= e.single['7']));
 });
+
+test('hold\'em ranges parse, count combos and write back compactly', () => {
+  const count = (t) => P.parseRange(t).combos.length;
+  assert.equal(count('JJ+'), 24);
+  assert.equal(count('ATo+'), 48);
+  assert.equal(count('A7s+'), 28);
+  assert.equal(count('JJ+, ATo+, A7s+'), 100);
+  assert.equal(count('22-55'), 24);
+  assert.equal(count('A5s-A2s'), 16);
+  assert.equal(count('KQ'), 16);
+  assert.equal(count('T9s-65s'), 20);
+  assert.equal(count('AsKs'), 1);
+  assert.equal(count('any'), 1326);
+  assert.equal(count('AKs, AKs, AsKs'), 4); // duplicates collapse
+  assert.throws(() => P.parseRange('AXs'), /Couldn/);
+  assert.throws(() => P.parseRange('AAs'), /pairs/);
+  const text = (t) => P.rangeToText(P.parseRange(t).labels);
+  assert.equal(text('JJ+, ATo+, A7s+'), 'JJ+, A7s+, ATo+');
+  assert.equal(text('22-55, 99'), '99, 55-22');
+  assert.equal(text('AJs+, AJo+'), 'AJ+');
+  assert.equal(text('A5s-A2s, KQo'), 'A5s-A2s, KQo');
+  // Round trip for every hand on the grid.
+  assert.equal(P.parseRange(text('any')).combos.length, 1326);
+});
+
+test('equity with ranges', () => {
+  const job = (hands, board) => P.createEquityJob(hands.map((h) => (h === null ? null : /^[2-9TJQKA][shdc]\s+[2-9TJQKA][shdc]$/i.test(h) ? cards(h) : { combos: P.parseRange(h).combos })),
+    board ? cards(board) : [], 'nlhe');
+  // A one-combo range behaves exactly like the hand.
+  const a = job(['As Ah', 'Kd Kc'], 'Kh 7d 2c').run();
+  const b = job(['AsAh', 'KdKc'], 'Kh 7d 2c').run();
+  assert.equal(a.players[0].equity, b.players[0].equity);
+  // Blockers: with the queen of spades on board, QQ has 3 combos left; every deal is counted.
+  const q = job(['Ah Kh', 'QQ'], 'Qs 7d 2c 4h');
+  assert.ok(q.exact);
+  assert.deepEqual(q.liveCombos, [null, 3]);
+  assert.equal(q.run().runouts, 3 * 44);
+  // Range vs range exactly on the turn adds up to 100%.
+  const rr = job(['JJ+', 'AKs'], 'Qs 7d 2c 4h').run();
+  assert.ok(rr.exact);
+  assert.ok(Math.abs(rr.players[0].equity + rr.players[1].equity - 1) < 1e-9);
+  // Preflop ranges are simulated: AA vs KK is about 82%.
+  const pre = job(['AA', 'KK']).run();
+  assert.ok(!pre.exact);
+  assert.ok(Math.abs(pre.players[0].equity - 0.82) < 0.01);
+  assert.throws(() => P.createEquityJob([{ combos: P.parseRange('AA').combos }, null], [], 'plo'), /hold/);
+});

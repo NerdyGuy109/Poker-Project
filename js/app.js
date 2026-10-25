@@ -624,33 +624,76 @@
     const n = game().holeCards;
     const example = { 2: 'As Kd', 4: 'As Kd Qh Jc', 5: 'As Kd Qh Jc 9s' }[n];
     const hands = state.equity.hands;
+    const holdem = state.game === 'nlhe';
     $('equity-players').innerHTML = hands.map((text, i) =>
       '<div class="eq-row" style="--player:' + PLAYER_COLORS[i] + '">' +
         '<label class="eq-label" for="eq-input-' + i + '"><span class="eq-dot"></span>Player ' + (i + 1) + '</label>' +
         '<div class="eq-inputs">' +
           '<input id="eq-input-' + i + '" data-eq-input="' + i + '" type="text" value="' + text.replace(/"/g, '&quot;') + '"' +
-          ' placeholder="Blank = random hand" title="Type ' + n + ' cards, e.g. ' + example + '" autocomplete="off" spellcheck="false" autocapitalize="off">' +
+          ' placeholder="' + (holdem ? 'Hand, range (JJ+, ATo+) or blank' : 'Blank = random hand') + '"' +
+          ' title="Type ' + n + ' cards, e.g. ' + example + (holdem ? ', or a range like JJ+, ATo+, A7s+' : '') + '" autocomplete="off" spellcheck="false" autocapitalize="off">' +
+          (holdem ? '<button type="button" data-eq-grid="' + i + '" title="Pick a range on the hand grid">Grid</button>' : '') +
           '<button type="button" data-eq-random="' + i + '">Random</button>' +
           '<button type="button" class="ghost eq-remove" data-eq-remove="' + i + '" aria-label="Remove player ' + (i + 1) + '"' +
           (hands.length <= 2 ? ' disabled' : '') + '>&times;</button>' +
         '</div>' +
+        '<div class="eq-sub" id="eq-sub-' + i + '"></div>' +
         '<div class="eq-result" id="eq-result-' + i + '"></div>' +
       '</div>').join('');
     $('equity-add').disabled = hands.length >= MAX_PLAYERS;
+    hands.forEach((t, i) => renderEquitySub(i));
   }
 
-  // Parses every player's hand. Returns { hands, errors } where hands[i] is null for a random hand.
-  function readEquityHands() {
+  // What a player's box holds: { kind: 'random' } | { kind: 'hand', cards } | { kind: 'range', combos, labels }.
+  // Throws a readable error. Ranges are hold'em only.
+  function parseEquityInput(text) {
+    if (!text.trim()) return { kind: 'random' };
     const need = game().holeCards;
+    let cards = null;
+    let cardError = null;
+    try { cards = P.parseCardList(text); } catch (e) { cardError = e; }
+    if (cards && cards.length === need) return { kind: 'hand', cards };
+    if (state.game !== 'nlhe') {
+      if (cardError) throw new Error(cardError.message + ' Ranges like JJ+ work in hold\u2019em only.');
+      throw new Error('Enter exactly ' + need + ' cards, or leave it blank for a random hand.');
+    }
+    try {
+      const r = P.parseRange(text);
+      return { kind: 'range', combos: r.combos, labels: r.labels };
+    } catch (e) {
+      throw new Error(cards ? 'Enter 2 cards (like As Kd) or a range (like JJ+, ATo+, A7s+).' : e.message);
+    }
+  }
+
+  // The small line under each box: what was understood, before any calculation.
+  function renderEquitySub(i, live) {
+    const el = $('eq-sub-' + i);
+    if (!el) return;
+    let text = '';
+    try {
+      const v = parseEquityInput(state.equity.hands[i]);
+      if (v.kind === 'random') text = 'Random hand on every runout';
+      else if (v.kind === 'range') {
+        text = 'Range: ' + v.combos.length + ' combo' + (v.combos.length === 1 ? '' : 's') + ' (' + (100 * v.combos.length / 1326).toFixed(1) + '% of hands)' +
+          (live !== undefined && live !== null && live !== v.combos.length ? ', ' + live + ' left after blockers' : '');
+      }
+    } catch (e) { /* the error shows when calculating */ }
+    el.textContent = text;
+  }
+
+  // Parses every player's hand. Returns { hands, errors } where hands[i] is a card array,
+  // null for a random hand, or { combos } for a range.
+  function readEquityHands() {
     const board = new Set(boardCards());
     const used = new Map();
     const hands = [];
     const errors = [];
     state.equity.hands.forEach((text, i) => {
-      if (!text.trim()) { hands.push(null); return; }
       try {
-        const cards = P.parseCardList(text);
-        if (cards.length !== need) throw new Error('Enter exactly ' + need + ' cards, or leave it blank for a random hand.');
+        const v = parseEquityInput(text);
+        if (v.kind === 'random') { hands.push(null); return; }
+        if (v.kind === 'range') { hands.push({ combos: v.combos }); return; }
+        const cards = v.cards;
         for (const c of cards) {
           if (board.has(c)) throw new Error(P.cardToString(c) + ' is on the board.');
           if (used.has(c)) throw new Error(P.cardToString(c) + ' is already in Player ' + (used.get(c) + 1) + '’s hand.');
@@ -717,6 +760,8 @@
       return;
     }
     state.equity.ran = true;
+    job.liveCombos.forEach((n, i) => renderEquitySub(i, n));
+    const ranges = hands.some((h) => h && !Array.isArray(h));
     $('equity-progress').hidden = false;
     $('equity-progress-bar').style.width = '0%';
     $('equity-status').textContent = job.exact
@@ -735,14 +780,76 @@
       }
       $('equity-progress').hidden = true;
       if (r.exact) {
-        $('equity-status').textContent = 'Exact: checked every one of ' + r.runouts.toLocaleString() + ' runout' + (r.runouts === 1 ? '' : 's') + '.';
+        $('equity-status').textContent = 'Exact: checked every one of ' + r.runouts.toLocaleString() + (ranges ? ' deals from the ranges and runouts' : ' runout' + (r.runouts === 1 ? '' : 's')) + '.';
       } else {
         const margin = 1.96 * Math.max(...r.players.map((p) => p.error));
         $('equity-status').textContent = 'Simulated ' + r.runouts.toLocaleString() + ' random runouts' +
-          (hands.includes(null) ? ' and random hands' : '') + '; results are within about ±' + (100 * margin).toFixed(1) + '%.';
+          (hands.includes(null) ? ' and random hands' : '') + (ranges ? ', dealing each range\u2019s hands at random' : '') +
+          '; results are within about ±' + (100 * margin).toFixed(1) + '%.';
       }
     };
     tick();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Range picker (hold'em): a 13x13 grid you click or drag across
+  // ---------------------------------------------------------------------------
+
+  const RANGE_PRESETS = [
+    { name: 'Pairs', range: '22+' },
+    { name: 'Suited aces', range: 'A2s+' },
+    { name: 'Broadways', range: 'TT+, AT+, KT+, QT+, JT' },
+    { name: 'Suited connectors', range: 'T9s-54s' },
+  ];
+  let rangeEdit = null; // { player, labels: Set, dragMode }
+
+  function openRangeDialog(i) {
+    let labels = new Set();
+    try {
+      const v = parseEquityInput(state.equity.hands[i]);
+      if (v.kind === 'range') labels = new Set(v.labels);
+    } catch (e) { /* start empty */ }
+    rangeEdit = { player: i, labels, dragMode: null };
+    $('range-title').textContent = 'Player ' + (i + 1) + '\u2019s range';
+    $('range-presets').innerHTML = RANGE_PRESETS.map((p, k) => '<button type="button" data-preset="' + k + '">+ ' + p.name + '</button>').join('');
+    renderRangeGrid();
+    $('range-dialog').showModal();
+  }
+
+  function renderRangeGrid() {
+    const labels = rangeEdit.labels;
+    $('range-grid').innerHTML = P.HAND_LABELS.map((label, idx) => {
+      const r = Math.floor(idx / 13);
+      const c = idx % 13;
+      return '<button type="button" class="range-cell' + (r === c ? ' pair' : '') + (labels.has(label) ? ' on' : '') + '" data-label="' + label + '">' + label + '</button>';
+    }).join('');
+    updateRangeCount();
+  }
+
+  function updateRangeCount() {
+    let combos = 0;
+    for (const label of rangeEdit.labels) combos += P.combosForLabel(label).length;
+    const text = P.rangeToText(rangeEdit.labels);
+    $('range-count').innerHTML = '<strong>' + combos + '</strong> combos (' + (100 * combos / 1326).toFixed(1) + '%)' +
+      (text ? ' &middot; <span class="muted">' + text + '</span>' : '');
+  }
+
+  function setRangeCell(el, on) {
+    const label = el.dataset.label;
+    if (on) rangeEdit.labels.add(label);
+    else rangeEdit.labels.delete(label);
+    el.classList.toggle('on', on);
+    updateRangeCount();
+  }
+
+  function finishRangeDialog() {
+    const i = rangeEdit.player;
+    state.equity.hands[i] = P.rangeToText(rangeEdit.labels);
+    $('eq-input-' + i).value = state.equity.hands[i];
+    $('range-dialog').close();
+    renderEquitySub(i);
+    if (state.equity.ran) runEquity();
+    else markEquityStale();
   }
 
   // Marks results out of date while a hand is being edited.
@@ -961,6 +1068,39 @@
     });
     $('equity-run').addEventListener('click', runEquity);
 
+    // Range picker: press on a cell to add or remove it, then drag across more cells (mouse or touch).
+    const grid = $('range-grid');
+    const cellAt = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      return el && el.closest('.range-cell');
+    };
+    grid.addEventListener('pointerdown', (e) => {
+      const cell = e.target.closest('.range-cell');
+      if (!cell) return;
+      e.preventDefault();
+      if (cell.hasPointerCapture && cell.hasPointerCapture(e.pointerId)) cell.releasePointerCapture(e.pointerId);
+      rangeEdit.dragMode = !cell.classList.contains('on');
+      setRangeCell(cell, rangeEdit.dragMode);
+    });
+    grid.addEventListener('pointermove', (e) => {
+      if (!rangeEdit || rangeEdit.dragMode === null) return;
+      const cell = cellAt(e);
+      if (cell && cell.classList.contains('on') !== rangeEdit.dragMode) setRangeCell(cell, rangeEdit.dragMode);
+    });
+    window.addEventListener('pointerup', () => { if (rangeEdit) rangeEdit.dragMode = null; });
+    $('range-presets').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-preset]');
+      if (!b) return;
+      for (const label of P.parseRange(RANGE_PRESETS[+b.dataset.preset].range).labels) rangeEdit.labels.add(label);
+      renderRangeGrid();
+    });
+    $('range-clear').addEventListener('click', () => {
+      rangeEdit.labels.clear();
+      renderRangeGrid();
+    });
+    $('range-done').addEventListener('click', finishRangeDialog);
+    $('range-cancel').addEventListener('click', () => $('range-dialog').close());
+
     $('runout-body').addEventListener('click', (e) => {
       const card = e.target.closest('[data-runout-card]');
       if (card) {
@@ -980,6 +1120,7 @@
       if (i === undefined) return;
       state.equity.hands[+i] = e.target.value;
       markEquityStale();
+      renderEquitySub(+i);
     });
     players.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && e.target.dataset.eqInput !== undefined) runEquity();
@@ -988,6 +1129,7 @@
       const t = e.target.closest('button');
       if (!t || t.disabled) return;
       if (t.dataset.eqRandom !== undefined) randomHandFor(+t.dataset.eqRandom);
+      else if (t.dataset.eqGrid !== undefined) openRangeDialog(+t.dataset.eqGrid);
       else if (t.dataset.eqRemove !== undefined) {
         state.equity.hands.splice(+t.dataset.eqRemove, 1);
         renderEquityPlayers();

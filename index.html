@@ -179,6 +179,21 @@
     </div>
   </main>
 
+  <dialog id="range-dialog" class="picker range-dialog" aria-labelledby="range-title">
+    <div class="picker-head">
+      <h2 id="range-title">Range</h2>
+      <button type="button" id="range-cancel" class="ghost" aria-label="Close">&times;</button>
+    </div>
+    <p class="hint">Click hands to add or remove them, or press and drag across several. Suited hands are above the diagonal, offsuit below.</p>
+    <div class="range-presets" id="range-presets"></div>
+    <div class="range-grid" id="range-grid"></div>
+    <p class="range-count" id="range-count"></p>
+    <div class="picker-foot">
+      <button type="button" id="range-clear" class="ghost">Clear</button>
+      <button type="button" id="range-done" class="primary">Use this range</button>
+    </div>
+  </dialog>
+
   <dialog id="picker" class="picker" aria-labelledby="picker-title">
     <div class="picker-head">
       <h2 id="picker-title">Choose a card</h2>

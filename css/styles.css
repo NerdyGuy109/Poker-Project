@@ -571,3 +571,22 @@ body.busy { cursor: progress; }
   .game-tabs#game-tabs { overflow-x: auto; scrollbar-width: none; }
   .game-tabs#game-tabs button { flex: none; padding: 7px 9px; }
 }
+
+/* ---------- Range picker ---------- */
+
+.eq-sub { grid-column: 2; font-size: 0.78rem; color: var(--muted); margin-top: -4px; min-height: 0; }
+.eq-sub:empty { display: none; }
+.range-dialog { width: min(640px, calc(100vw - 24px)); }
+.range-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.range-presets button { font-size: 0.8rem; padding: 4px 10px; border-radius: 999px; }
+.range-grid { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 2px; touch-action: none; user-select: none; }
+.range-cell { aspect-ratio: 1; padding: 0; min-width: 0; border-radius: 3px; font-size: clamp(0.5rem, 2.3vw, 0.75rem); font-weight: 600; background: var(--cell-bg); color: var(--text); }
+.range-cell.pair { background: var(--cell-pair); }
+.range-cell.on { background: var(--accent); color: #fff; }
+.range-cell:hover:not(:disabled) { filter: brightness(1.08); }
+.range-count { margin: 10px 0 0; font-size: 0.88rem; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .eq-sub { grid-column: 1; margin-top: -2px; }
+}
+.range-cell.on:hover:not(:disabled) { background: var(--accent); }
+.range-cell:not(.on):hover:not(:disabled) { background: var(--button-hover); }

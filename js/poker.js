@@ -1051,7 +1051,160 @@
   const TRIAL_LIMIT = { nlhe: 400000, omaha: 100000 };
   const TIME_LIMIT_MS = 2500;
 
-  // Builds an equity calculation. hands: array of card arrays, or null for a random hand.
+  // ---------------------------------------------------------------------------
+  // Hold'em ranges: "JJ+, ATo+, A7s+, KQ, T9s-65s, AsKs"
+  // ---------------------------------------------------------------------------
+
+  const RANK_RE = '[2-9TJQKA]';
+
+  // The 13x13 hand labels ("AA", "AKs", "AKo") ordered like the grid.
+  const HAND_LABELS = (() => {
+    const out = [];
+    for (let r = 0; r < 13; r++) {
+      for (let c = 0; c < 13; c++) {
+        const hi = RANKS[12 - Math.min(r, c)];
+        const lo = RANKS[12 - Math.max(r, c)];
+        out.push(r === c ? hi + lo : hi + lo + (r < c ? 's' : 'o'));
+      }
+    }
+    return out;
+  })();
+
+  // All combos (pairs of card numbers, high card first) for a label like "AKs", "AKo" or "QQ".
+  function combosForLabel(label) {
+    const r1 = RANKS.indexOf(label[0]);
+    const r2 = RANKS.indexOf(label[1]);
+    const out = [];
+    if (r1 === r2) {
+      for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) out.push([makeCard(r1, b), makeCard(r1, a)]);
+    } else if (label[2] === 's') {
+      for (let a = 0; a < 4; a++) out.push([makeCard(r1, a), makeCard(r2, a)]);
+    } else {
+      for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) if (a !== b) out.push([makeCard(r1, a), makeCard(r2, b)]);
+    }
+    return out;
+  }
+
+  const labelOf = (hi, lo, kind) => RANKS[hi] + RANKS[lo] + (hi === lo ? '' : kind);
+
+  // Labels for an unpaired token, expanding "s/o" absence to both.
+  function unpairedLabels(hi, lo, kind) {
+    return kind ? [labelOf(hi, lo, kind)] : [labelOf(hi, lo, 's'), labelOf(hi, lo, 'o')];
+  }
+
+  // Parses a hold'em range. Returns { labels: Set, combos: [[c1, c2], ...] } (no duplicates).
+  // Throws with a readable message for anything it doesn't understand.
+  function parseRange(text) {
+    const labels = new Set();
+    const combos = new Map(); // "c1,c2" -> [c1, c2]
+    const addCombo = (a, b) => {
+      const hi = Math.max(a, b);
+      const lo = Math.min(a, b);
+      combos.set(hi + ',' + lo, [hi, lo]);
+    };
+    const addLabel = (label) => {
+      labels.add(label);
+      for (const [a, b] of combosForLabel(label)) addCombo(a, b);
+    };
+    const tokens = text.replace(/\s*-\s*/g, '-').split(/[\s,;]+/).filter(Boolean);
+    if (!tokens.length) throw new Error('Enter a range, e.g. JJ+, ATo+, A7s+.');
+    const rank = (ch) => RANKS.indexOf(ch.toUpperCase());
+
+    for (const raw of tokens) {
+      const t = raw.replace(/10/g, 'T');
+      let m;
+      if (/^(any|random|100%)$/i.test(t)) {
+        HAND_LABELS.forEach(addLabel);
+      } else if ((m = t.match(new RegExp('^(' + RANK_RE + ')([shdc])(' + RANK_RE + ')([shdc])$', 'i')))) {
+        const a = makeCard(rank(m[1]), SUITS.indexOf(m[2].toLowerCase()));
+        const b = makeCard(rank(m[3]), SUITS.indexOf(m[4].toLowerCase()));
+        if (a === b) throw new Error('"' + raw + '" uses the same card twice.');
+        addCombo(a, b);
+      } else if ((m = t.match(new RegExp('^(' + RANK_RE + ')(' + RANK_RE + ')([so]?)(\\+?)$', 'i')))) {
+        let hi = rank(m[1]);
+        let lo = rank(m[2]);
+        const kind = m[3].toLowerCase();
+        if (hi < lo) [hi, lo] = [lo, hi];
+        if (hi === lo) {
+          if (kind) throw new Error('"' + raw + '": pairs can’t be suited or offsuit.');
+          for (let r = hi; r <= (m[4] ? 12 : hi); r++) addLabel(labelOf(r, r));
+        } else {
+          for (let k = lo; k <= (m[4] ? hi - 1 : lo); k++) unpairedLabels(hi, k, kind).forEach(addLabel);
+        }
+      } else if ((m = t.match(new RegExp('^(' + RANK_RE + ')(' + RANK_RE + ')([so]?)-(' + RANK_RE + ')(' + RANK_RE + ')([so]?)$', 'i')))) {
+        const kind = (m[3] || m[6]).toLowerCase();
+        if (m[3] && m[6] && m[3].toLowerCase() !== m[6].toLowerCase()) throw new Error('"' + raw + '" mixes suited and offsuit.');
+        let [a1, a2, b1, b2] = [rank(m[1]), rank(m[2]), rank(m[4]), rank(m[5])];
+        if (a1 < a2) [a1, a2] = [a2, a1];
+        if (b1 < b2) [b1, b2] = [b2, b1];
+        if (a1 === a2 && b1 === b2) {
+          // Pair run: 22-66
+          for (let r = Math.min(a1, b1); r <= Math.max(a1, b1); r++) addLabel(labelOf(r, r));
+        } else if (a1 === b1 && a1 !== a2 && b1 !== b2) {
+          // Same top card: A2s-A5s
+          for (let k = Math.min(a2, b2); k <= Math.max(a2, b2); k++) unpairedLabels(a1, k, kind).forEach(addLabel);
+        } else if (a1 - a2 === b1 - b2 && a1 !== a2) {
+          // Same gap: T9s-65s
+          const gap = a1 - a2;
+          for (let top = Math.min(a1, b1); top <= Math.max(a1, b1); top++) unpairedLabels(top, top - gap, kind).forEach(addLabel);
+        } else {
+          throw new Error('Couldn’t read the range "' + raw + '".');
+        }
+      } else {
+        throw new Error('Couldn’t read "' + raw + '". Try forms like JJ+, 22-55, ATo+, A7s+, KQ, T9s-65s or AsKs.');
+      }
+    }
+    return { labels, combos: [...combos.values()] };
+  }
+
+  // Writes a set of grid labels back as short range notation, e.g. "JJ+, 55-22, ATs+, KQo".
+  function rangeToText(labelSet) {
+    const parts = [];
+    const pairs = [];
+    for (let r = 12; r >= 0; r--) if (labelSet.has(labelOf(r, r))) pairs.push(r);
+    // Runs of consecutive ranks (descending input).
+    const runs = (ranks) => {
+      const out = [];
+      for (const r of ranks) {
+        const last = out[out.length - 1];
+        if (last && last[last.length - 1] === r + 1) last.push(r);
+        else out.push([r]);
+      }
+      return out;
+    };
+    for (const run of runs(pairs)) {
+      const top = run[0];
+      const bottom = run[run.length - 1];
+      if (run.length === 1) parts.push(labelOf(top, top));
+      else if (top === 12) parts.push(labelOf(bottom, bottom) + '+');
+      else parts.push(labelOf(top, top) + '-' + labelOf(bottom, bottom));
+    }
+    const runText = (hi, run, kind) => {
+      const top = run[0];
+      const bottom = run[run.length - 1];
+      if (run.length === 1) return labelOf(hi, top, kind);
+      if (top === hi - 1) return labelOf(hi, bottom, kind) + '+';
+      return labelOf(hi, top, kind) + '-' + labelOf(hi, bottom, kind);
+    };
+    for (let hi = 12; hi >= 1; hi--) {
+      const kickers = { s: [], o: [] };
+      for (let lo = hi - 1; lo >= 0; lo--) {
+        for (const kind of ['s', 'o']) if (labelSet.has(labelOf(hi, lo, kind))) kickers[kind].push(lo);
+      }
+      const sRuns = runs(kickers.s).map((r) => runText(hi, r, 's'));
+      const oRuns = runs(kickers.o).map((r) => runText(hi, r, 'o'));
+      // Where the suited and offsuit runs match exactly, write them once without s/o.
+      const strip = (x) => x.replace(/[so]/g, '');
+      const both = sRuns.filter((x) => oRuns.some((y) => strip(y) === strip(x)));
+      for (const x of both) parts.push(strip(x));
+      for (const x of sRuns) if (!both.includes(x)) parts.push(x);
+      for (const x of oRuns) if (!both.some((b) => strip(b) === strip(x))) parts.push(x);
+    }
+    return parts.join(', ');
+  }
+
+  // Builds an equity calculation. hands[i] is a card array, null for a random hand, or
+  // { combos: [[c1, c2], ...] } for a hold'em range (every valid deal is equally likely).
   // Call step(ms) until it returns true (lets a page stay responsive), or run() to finish at once.
   function createEquityJob(hands, board, gameId) {
     const game = GAMES[gameId];
@@ -1062,9 +1215,10 @@
     if (nPlayers < 2) throw new Error('Equity needs at least two players.');
     if (board.length > 5) throw new Error('The board has too many cards.');
 
+    const isRange = (h) => h && !Array.isArray(h);
     const known = board.slice();
     for (const h of hands) {
-      if (!h) continue;
+      if (!h || isRange(h)) continue;
       if (h.length !== k) throw new Error('Each hand needs exactly ' + k + ' cards.');
       known.push(...h);
     }
@@ -1073,21 +1227,52 @@
     const deck = [];
     for (let c = 0; c < 52; c++) if (!knownSet.has(c)) deck.push(c);
 
+    // Ranges lose every combo that uses a known card.
+    const rangeSeats = [];
+    const rangeCombos = hands.map((h, i) => {
+      if (!isRange(h)) return null;
+      if (omaha) throw new Error('Ranges are only supported for hold’em.');
+      const live = h.combos.filter(([a, b]) => !knownSet.has(a) && !knownSet.has(b));
+      if (!live.length) throw new Error('Player ' + (i + 1) + '’s range has no hands left once the known cards are removed.');
+      rangeSeats.push(i);
+      return live;
+    });
+
     const randomSeats = hands.map((h, i) => (h ? -1 : i)).filter((i) => i >= 0);
     const need = 5 - board.length;
-    if (deck.length < need + randomSeats.length * k) throw new Error('Not enough cards left in the deck.');
+    if (deck.length < need + (randomSeats.length * k) + rangeSeats.length * 2) throw new Error('Not enough cards left in the deck.');
 
-    const players = hands.map((h) => (h ? prepareHand(h, omaha) : null));
+    const players = hands.map((h) => (h && !isRange(h) ? prepareHand(h, omaha) : null));
     const evalsPerPlayer = omaha ? binomial(k, 2) * 10 : 1;
-    const runouts = binomial(deck.length, need);
-    const exact = randomSeats.length === 0 && runouts * nPlayers * evalsPerPlayer <= EXACT_LIMIT;
-    const maxTrials = exact ? runouts : TRIAL_LIMIT[omaha ? 'omaha' : 'nlhe'];
+    const runoutsPerDeal = binomial(deck.length - rangeSeats.length * 2, need);
+
+    // Exact mode: list every valid way to deal the ranges (when there aren't too many), then every runout.
+    let assignments = null;
+    if (randomSeats.length === 0) {
+      const product = rangeSeats.reduce((n, i) => n * rangeCombos[i].length, 1);
+      if (product * runoutsPerDeal * nPlayers * evalsPerPlayer <= EXACT_LIMIT) {
+        assignments = [];
+        const pick = (depth, used, acc) => {
+          if (depth === rangeSeats.length) { assignments.push(acc.slice()); return; }
+          for (const combo of rangeCombos[rangeSeats[depth]]) {
+            if (used.has(combo[0]) || used.has(combo[1])) continue;
+            used.add(combo[0]); used.add(combo[1]); acc.push(combo);
+            pick(depth + 1, used, acc);
+            used.delete(combo[0]); used.delete(combo[1]); acc.pop();
+          }
+        };
+        pick(0, new Set(), []);
+        if (!assignments.length) throw new Error('The ranges block each other completely.');
+      }
+    }
+    const exact = assignments !== null;
+    const totalExact = exact ? assignments.length * runoutsPerDeal : 0;
+    const maxTrials = exact ? totalExact : TRIAL_LIMIT[omaha ? 'omaha' : 'nlhe'];
 
     const stats = hands.map(() => ({ share: 0, win: 0, tie: 0, high: 0, low: 0 }));
     const hi = new Float64Array(nPlayers);
     const lo = new Float64Array(nPlayers);
     const fullBoard = board.concat(new Array(need).fill(0));
-    const combo = Array.from({ length: need }, (_, i) => i); // exact enumeration state
     let done = 0;
     let started = 0;
     let finished = false;
@@ -1115,28 +1300,73 @@
       done++;
     }
 
-    function nextExact() {
-      for (let i = 0; i < need; i++) fullBoard[board.length + i] = deck[combo[i]];
-      settle();
-      // Advance to the next combination of `need` deck indexes.
-      let i = need - 1;
-      while (i >= 0 && combo[i] === deck.length - need + i) i--;
-      if (i < 0) return false;
-      combo[i]++;
-      for (let j = i + 1; j < need; j++) combo[j] = combo[j - 1] + 1;
+    // Exact enumeration state: which range deal, and which runout within it.
+    let dealIndex = -1;
+    let dealDeck = null;
+    const combo = Array.from({ length: need }, (_, i) => i);
+    let comboDone = true;
+
+    function startDeal() {
+      dealIndex++;
+      if (dealIndex >= assignments.length) return false;
+      const used = new Set();
+      assignments[dealIndex].forEach((c, j) => {
+        players[rangeSeats[j]] = prepareHand(c, omaha);
+        used.add(c[0]);
+        used.add(c[1]);
+      });
+      dealDeck = deck.filter((c) => !used.has(c));
+      for (let i = 0; i < need; i++) combo[i] = i;
+      comboDone = false;
       return true;
     }
 
-    // Partial Fisher-Yates on the shared deck array: uniform without resetting it each trial.
+    function nextExact() {
+      if (comboDone && !startDeal()) return false;
+      for (let i = 0; i < need; i++) fullBoard[board.length + i] = dealDeck[combo[i]];
+      settle();
+      // Advance to the next combination of `need` deck indexes.
+      let i = need - 1;
+      while (i >= 0 && combo[i] === dealDeck.length - need + i) i--;
+      if (i < 0) comboDone = true;
+      else {
+        combo[i]++;
+        for (let j = i + 1; j < need; j++) combo[j] = combo[j - 1] + 1;
+      }
+      return true;
+    }
+
+    // Random deals: ranges first (rejecting deals where they collide, so every valid deal is equally
+    // likely), then random hands and the board from what's left.
+    const usedMark = new Uint8Array(52);
     function nextRandom() {
+      let picked;
+      for (let attempt = 0; ; attempt++) {
+        picked = rangeSeats.map((i) => rangeCombos[i][Math.floor(Math.random() * rangeCombos[i].length)]);
+        const seen = new Set();
+        let clash = false;
+        for (const [a, b] of picked) {
+          if (seen.has(a) || seen.has(b)) { clash = true; break; }
+          seen.add(a); seen.add(b);
+        }
+        if (!clash) break;
+        if (attempt > 10000) throw new Error('The ranges block each other almost completely.');
+      }
+      picked.forEach((c, j) => {
+        players[rangeSeats[j]] = prepareHand(c, omaha);
+        usedMark[c[0]] = 1;
+        usedMark[c[1]] = 1;
+      });
       let pos = 0;
       const take = () => {
-        const j = pos + Math.floor(Math.random() * (deck.length - pos));
-        const c = deck[j];
-        deck[j] = deck[pos];
-        deck[pos] = c;
-        pos++;
-        return c;
+        for (;;) {
+          const j = pos + Math.floor(Math.random() * (deck.length - pos));
+          const c = deck[j];
+          deck[j] = deck[pos];
+          deck[pos] = c;
+          pos++;
+          if (!usedMark[c]) return c;
+        }
       };
       for (const seat of randomSeats) {
         const hand = [];
@@ -1145,6 +1375,10 @@
       }
       for (let i = 0; i < need; i++) fullBoard[board.length + i] = take();
       settle();
+      picked.forEach((c) => {
+        usedMark[c[0]] = 0;
+        usedMark[c[1]] = 0;
+      });
     }
 
     function step(ms) {
@@ -1185,7 +1419,8 @@
 
     return {
       exact,
-      totalRunouts: exact ? runouts : null,
+      totalRunouts: exact ? totalExact : null,
+      liveCombos: rangeCombos.map((c) => (c ? c.length : null)),
       step,
       results,
       run() {
@@ -1212,6 +1447,10 @@
     parseCardList,
     scoreCards,
     createEquityJob,
+    HAND_LABELS,
+    combosForLabel,
+    parseRange,
+    rangeToText,
     RUNOUT_TAGS,
     boardChangeTags,
     runoutTree,
