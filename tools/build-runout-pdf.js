@@ -71,10 +71,13 @@ const suits =
   ]) +
   typeCard('Monotone flop', 'K\u2665 8\u2665 3\u2665', [
     row('Fourth of the suit: four-flush', T('suit:monotone', 'flush4'), 10),
-    row('Off-suit', T('suit:monotone', 'newSuit'), 39),
+    // Every card that pairs a monotone flop is off-suit, so the 39 off-suit cards split cleanly.
+    row('Off-suit, pairs the board', T('suit:monotone', 'pairs'), 9),
+    row('Off-suit, no pair', T('suit:monotone', 'newSuit') - T('suit:monotone', 'pairs'), 30),
   ], [
     riverRow('Four or five of the suit', R('suit:monotone', 'flush4plus')),
     riverRow('Five of the suit (board flush)', R('suit:monotone', 'flush5')),
+    riverRow('Board paired (or better)', R('suit:monotone', 'paired')),
   ]);
 
 // ---- Pairing ----
