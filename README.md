@@ -175,7 +175,7 @@ If a hand is in more than one highlighted group, it takes the color of the first
 
 ## Copyright and license
 
-Copyright (c) 2026 NerdyGuy109. All rights reserved. No permission is granted to copy, modify, host or redistribute this project or any part of it without written permission. See [LICENSE](LICENSE).
+Copyright (c) 2026 Adam Wolfe. All rights reserved. No permission is granted to copy, modify, host or redistribute this project or any part of it without written permission. See [LICENSE](LICENSE).
 
 ## Hosting privately with Cloudflare
 
