@@ -35,8 +35,8 @@ function riverRow(event, p, note) {
 
 // One flop type per row: its name, then the turn table and the by-the-river table side by side.
 function typeCard(title, example, turnRows, riverRows) {
-  return '<div class="typecard"><div class="tc-name"><h4>' + title + '</h4><span class="ex">' + example + '</span></div>' +
-    '<div>' + table('Turn card', turnRows) + '</div><div>' + table('By the river', riverRows, 'Pairs') + '</div></div>';
+  return '<div class="typecard"><h4>' + title + ' <span class="ex">' + example + '</span></h4>' +
+    table('Turn card', turnRows) + table('By the river', riverRows, 'Pairs') + '</div>';
 }
 
 // ---- Flop frequencies ----
@@ -126,55 +126,46 @@ const gapTable = '<table><thead><tr><th>Two connecting cards</th><th class="num"
   }).join('') + '</tbody></table>';
 
 // ---- Summary by flop type ----
-const summary = '<table class="summary"><thead><tr><th>Flop</th><th class="num">How often</th><th>Turn: flush</th><th>Turn: pairing</th><th>River: flush</th><th>River: pairing</th></tr></thead><tbody>' +
-  [
-    ['rainbow', 'unpaired', 'Two-tone ' + pct(T('suit:rainbow', 'twoTone'), 0), 'Pairs ' + pct(T('pair:unpaired', 'pairs')), 'Possible ' + pct(R('suit:rainbow', 'flush3plus')), 'Paired ' + pct(R('pair:unpaired', 'paired'))],
-    ['two-tone', 'unpaired', 'Flush possible ' + pct(T('suit:two-tone', 'flush3')), 'Pairs ' + pct(T('pair:unpaired', 'pairs')), 'Possible ' + pct(R('suit:two-tone', 'flush3plus')), 'Paired ' + pct(R('pair:unpaired', 'paired'))],
-    ['monotone', 'unpaired', 'Four-flush ' + pct(T('suit:monotone', 'flush4')), 'Pairs ' + pct(T('pair:unpaired', 'pairs')), 'Four-flush+ ' + pct(R('suit:monotone', 'flush4plus')), 'Paired ' + pct(R('pair:unpaired', 'paired'))],
-    ['rainbow', 'paired', 'Two-tone ' + pct(T('suit:rainbow', 'twoTone'), 0), 'Trips ' + pct(T('pair:paired', 'tripsBoard')) + ', two pair ' + pct(T('pair:paired', 'twoPairBoard')), 'Possible ' + pct(R('suit:rainbow', 'flush3plus')), 'Trips+ ' + pct(R('pair:paired', 'tripsPlus'))],
-    ['two-tone', 'paired', 'Flush possible ' + pct(T('suit:two-tone', 'flush3')), 'Trips ' + pct(T('pair:paired', 'tripsBoard')) + ', two pair ' + pct(T('pair:paired', 'twoPairBoard')), 'Possible ' + pct(R('suit:two-tone', 'flush3plus')), 'Trips+ ' + pct(R('pair:paired', 'tripsPlus'))],
-    ['rainbow', 'trips', 'Two-tone ' + pct(T('suit:rainbow', 'twoTone'), 0), 'Quads ' + pct(T('pair:trips', 'quads')), 'Possible ' + pct(R('suit:rainbow', 'flush3plus')), 'Quads ' + pct(R('pair:trips', 'quads'))],
-  ].map(([s, p, a, b, c, e]) => '<tr><td><strong>' + label(s, p) + '</strong></td><td class="num">' + pct(d['type:' + s + '|' + p].share) + '</td><td>' + a + '</td><td>' + b + '</td><td>' + c + '</td><td>' + e + '</td></tr>').join('') +
-  '</tbody></table>';
+// One card per flop type: how often it comes, then four labelled numbers.
+const stat = (label, desc, p) => '<div class="stat"><span class="lbl">' + label + '</span><span class="val">' + desc + ' <b>' + p + '</b></span></div>';
+const summaryRows = [
+  ['rainbow', 'unpaired', ['Two-tone', pct(T('suit:rainbow', 'twoTone'))], ['Pairs', pct(T('pair:unpaired', 'pairs'))], ['Flush possible', pct(R('suit:rainbow', 'flush3plus'))], ['Paired', pct(R('pair:unpaired', 'paired'))]],
+  ['two-tone', 'unpaired', ['Flush possible', pct(T('suit:two-tone', 'flush3'))], ['Pairs', pct(T('pair:unpaired', 'pairs'))], ['Flush possible', pct(R('suit:two-tone', 'flush3plus'))], ['Paired', pct(R('pair:unpaired', 'paired'))]],
+  ['monotone', 'unpaired', ['Four-flush', pct(T('suit:monotone', 'flush4'))], ['Pairs', pct(T('pair:unpaired', 'pairs'))], ['Four-flush+', pct(R('suit:monotone', 'flush4plus'))], ['Paired', pct(R('pair:unpaired', 'paired'))]],
+  ['rainbow', 'paired', ['Two-tone', pct(T('suit:rainbow', 'twoTone'))], ['Trips', pct(T('pair:paired', 'tripsBoard'))], ['Flush possible', pct(R('suit:rainbow', 'flush3plus'))], ['Trips+', pct(R('pair:paired', 'tripsPlus'))]],
+  ['two-tone', 'paired', ['Flush possible', pct(T('suit:two-tone', 'flush3'))], ['Trips', pct(T('pair:paired', 'tripsBoard'))], ['Flush possible', pct(R('suit:two-tone', 'flush3plus'))], ['Trips+', pct(R('pair:paired', 'tripsPlus'))]],
+  ['rainbow', 'trips', ['Two-tone', pct(T('suit:rainbow', 'twoTone'))], ['Quads', pct(T('pair:trips', 'quads'))], ['Flush possible', pct(R('suit:rainbow', 'flush3plus'))], ['Quads', pct(R('pair:trips', 'quads'))]],
+];
+const summary = summaryRows.map(([s, p, tf, tp, rf, rp]) =>
+  '<div class="sumcard"><div class="sum-name"><strong>' + label(s, p) + '</strong><span>' + pct(d['type:' + s + '|' + p].share) + ' of flops</span></div>' +
+  '<div class="sum-stats">' + stat('Turn &middot; flush', tf[0], tf[1]) + stat('Turn &middot; pairing', tp[0], tp[1]) +
+  stat('River &middot; flush', rf[0], rf[1]) + stat('River &middot; pairing', rp[0], rp[1]) + '</div></div>').join('') +
+  '<p class="muted">&ldquo;River&rdquo; means by the river (after both the turn and river). Paired flops can also become two pair on board: ' + pct(T('pair:paired', 'twoPairBoard')) + ' on the turn.</p>';
 
-const html = `<!doctype html><html><head><meta charset="utf-8"><title>Flop Runout Cheat Sheet</title><style>
-@page { size: Letter; margin: 14mm 13mm; }
-* { box-sizing: border-box; }
-body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1d2125; font-size: 9.6pt; line-height: 1.35; margin: 0; }
-h1 { font-size: 20pt; margin: 0; letter-spacing: -0.01em; }
-.sub { color: #5b6168; margin: 2px 0 10px; font-size: 10.5pt; }
-h2 { font-size: 13pt; margin: 14px 0 6px; padding-bottom: 3px; border-bottom: 2px solid #127a4f; color: #127a4f; }
-h4 { margin: 0 0 4px; font-size: 10.5pt; }
-.ex { font-weight: 400; color: #5b6168; font-size: 9pt; margin-left: 4px; }
-table { width: 100%; border-collapse: collapse; margin: 0 0 6px; }
-th { text-align: left; font-size: 7.6pt; color: #5b6168; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 3px 4px; border-bottom: 1px solid #cfd2cc; }
-td { padding: 3px 4px; border-bottom: 1px solid #ecede9; vertical-align: top; }
-.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.big { font-weight: 700; font-size: 10.5pt; color: #127a4f; }
-.muted { color: #6b7178; }
-.note { display: block; color: #6b7178; font-size: 7.8pt; }
-tr.total td { font-size: 8.6pt; color: #3d4248; border-bottom: 0; }
-tr.group td { border-top: 1.5px solid #cfd2cc; }
-.typecard { display: grid; grid-template-columns: 112px 1fr 1fr; gap: 12px; border: 1px solid #dfe1dc; border-radius: 6px; padding: 8px 10px 2px; margin-bottom: 8px; break-inside: avoid; }
-.tc-name h4 { margin: 2px 0 2px; }
-.tc-name .ex { margin-left: 0; display: block; }
-.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
-.card { border: 1px solid #dfe1dc; border-radius: 6px; padding: 8px 8px 2px; break-inside: avoid; }
-.box { background: #f1f6f2; border-left: 4px solid #127a4f; border-radius: 4px; padding: 7px 10px; margin: 8px 0; }
-.box p { margin: 0 0 4px; }
-.anchor { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 8px 0 4px; }
-.anchor div { border: 1px solid #dfe1dc; border-radius: 6px; padding: 6px 8px; text-align: center; }
-.anchor strong { display: block; font-size: 15pt; color: #127a4f; }
-.anchor span { font-size: 8pt; color: #5b6168; }
-.summary td { font-size: 9pt; }
-ul { margin: 4px 0 0 16px; padding: 0; }
-li { margin-bottom: 3px; }
-.page { break-before: page; }
-table, .cols2, ul { break-inside: avoid; }
-h2 { break-after: avoid; }
-.foot { color: #8a9096; font-size: 7.5pt; margin-top: 10px; }
-</style></head><body>
-<h1>Flop runout cheat sheet</h1>
+// ---- Test yourself ----
+const quiz = [
+  ['Turn pairs an unpaired flop', pct(T('pair:unpaired', 'pairs')) + ' (9 cards)'],
+  ['Unpaired flop is paired by the river', pct(R('pair:unpaired', 'paired'))],
+  ['Two-tone flop: turn is a third flush card', pct(T('suit:two-tone', 'flush3')) + ' (11 cards)'],
+  ['Two-tone flop: flush possible by the river', pct(R('suit:two-tone', 'flush3plus'))],
+  ['Rainbow flop: flush possible by the river', pct(R('suit:rainbow', 'flush3plus'))],
+  ['Monotone flop: turn is a fourth flush card', pct(T('suit:monotone', 'flush4')) + ' (10 cards)'],
+  ['Monotone flop: four or more of the suit by the river', pct(R('suit:monotone', 'flush4plus'))],
+  ['Paired flop: turn makes trips on board', pct(T('pair:paired', 'tripsBoard')) + ' (2 cards)'],
+  ['Paired flop: trips or better by the river', pct(R('pair:paired', 'tripsPlus'))],
+  ['Touching cards (8-7): turn makes a straight possible', '49.0% (24 cards)'],
+  ['Straight-possible flop: turn gives four to a straight', pct(avg('conn:3', 'turn', 'fourStraight')) + ' on average'],
+  ['How often is the flop two-tone?', pct(d['suit:two-tone'].share)],
+  ['How often is the flop paired?', pct(d['pair:paired'].share)],
+  ['How often is the flop monotone?', pct(d['suit:monotone'].share)],
+];
+const quizTable = '<table class="quiz"><thead><tr><th>#</th><th>Question</th><th class="num">Answer (cover me)</th></tr></thead><tbody>' +
+  quiz.map(([q, a], i) => '<tr><td class="muted">' + (i + 1) + '</td><td>' + q + '</td><td class="num big">' + a + '</td></tr>').join('') + '</tbody></table>';
+
+// Every page is a fixed-height sheet; before printing, each sheet's text is grown to the largest
+// size that still fits (see fitPages below), so pages fill up and read well on a phone.
+const sheets = [
+  `<h1>Flop runout cheat sheet</h1>
 <p class="sub">Exact turn and river odds for every kind of flop &middot; Texas hold’em (and any game with a flop, turn and river)</p>
 <div class="box">
   <p><strong>How to read it.</strong> Turn odds count the 49 cards not on the flop; river odds (&ldquo;by the river&rdquo;) count all 1,176 possible turn + river pairs. The board is all that’s known: hole cards aren’t removed, so each relevant card in your own hand moves a turn number by about 2%.</p>
@@ -186,28 +177,19 @@ h2 { break-after: avoid; }
   <div><strong>11 cards</strong><span>third flush card on two-tone: 22.4%</span></div>
   <div><strong>10 cards</strong><span>four-flush on monotone: 20.4%</span></div>
 </div>
-
 <h2>1 &middot; How often each flop comes</h2>
-<div class="cols2"><div>${freq}</div><div class="box" style="margin-top:0"><p><strong>Out of 22,100 possible flops.</strong></p><p>More than half of all flops are two-tone, and about 1 in 6 is paired. Monotone flops come about 1 time in 19; trips about 1 in 425.</p><p>Every number on these pages is exact, counted over every flop, turn and river.</p></div></div>
-
-<h2 class="page">2 &middot; Flush runouts</h2>
-${suits}
-
-<h2 class="page">3 &middot; Pairing runouts</h2>
-${pairs}
-
-<h2 class="page">4 &middot; Straight runouts</h2>
+${freq}
+<div class="box"><p><strong>Out of 22,100 possible flops.</strong> More than half of all flops are two-tone, and about 1 in 6 is paired. Monotone flops come about 1 time in 19; trips about 1 in 425. Every number in this sheet is exact, counted over every flop, turn and river.</p></div>`,
+  `<h2>2 &middot; Flush runouts</h2>${suits}`,
+  `<h2>3 &middot; Pairing runouts</h2>${pairs}`,
+  `<h2>4 &middot; Straight runouts</h2>
 <p>Straight odds depend on how connected the ranks are, so these are averages over every unpaired flop of each kind, with the lowest and highest value in that group. &ldquo;Straight possible&rdquo; means three board cards fit in one five-card straight, so two hole cards can make it.</p>
 ${connTable}
-<div class="cols2">
-  <div><h4>Counting rule for two connecting cards</h4><p>With exactly two flop cards that could share a straight, in the middle of the deck, the turn makes a straight possible with <strong>4 cards for each rank that fits</strong>: 24 cards when they touch, then 4 fewer for each gap.</p></div>
-  <div>${gapTable}</div>
-</div>
-
-<h2 class="page">5 &middot; One line per flop type</h2>
-${summary}
-
-<h2 class="page">Memory tips</h2>
+<h4>Counting rule for two connecting cards</h4>
+<p>With exactly two flop cards that could share a straight, in the middle of the deck, the turn makes a straight possible with <strong>4 cards for each rank that fits</strong>: 24 cards when they touch, then 4 fewer for each gap.</p>
+${gapTable}`,
+  `<h2>5 &middot; One line per flop type</h2>${summary}`,
+  `<h2>Memory tips</h2>
 <ul>
   <li><strong>Count cards, then double:</strong> on the turn each card is about 2% (exactly 2.04%). 9 cards &asymp; 18%, 11 &asymp; 22%, 12 &asymp; 24.5%, 36 &asymp; 73.5%.</li>
   <li><strong>The board pairs by the river about 39% of the time</strong> (38.8%) on any unpaired flop, roughly 2 times in 5.</li>
@@ -215,7 +197,59 @@ ${summary}
   <li><strong>Monotone flops:</strong> the turn is a fourth flush card 1 time in 5 (20.4%); by the river a fourth (or fifth) flush card lands 37% of the time.</li>
   <li><strong>Paired flops:</strong> the case card (trips) arrives 4.1% on the turn and 8.3% by the river; the board becomes two pair 6.1% on the turn.</li>
 </ul>
-<p class="foot">Generated by tools/build-runout-pdf.js in the Poker Board Analyzer project. All figures are exact counts over 22,100 flops, 49 turn cards and 1,176 turn + river pairs per flop.</p>
+<div class="box"><p><strong>Study tip:</strong> learn the card counts (9, 11, 10, 12, 36 on the turn) and the four &ldquo;by the river&rdquo; anchors: <strong>38.8%</strong> paired, <strong>45.8%</strong> two-tone flush, <strong>16.8%</strong> rainbow flush, <strong>37%</strong> monotone four-flush. Most other numbers follow from them.</p></div>`,
+  `<h2>Test yourself</h2>
+<p class="muted">Cover the right-hand column and answer from memory.</p>
+${quizTable}
+<p class="foot">Generated by tools/build-runout-pdf.js in the Poker Board Analyzer project. All figures are exact counts over 22,100 flops, 49 turn cards and 1,176 turn + river pairs per flop.</p>`,
+];
+
+const html = `<!doctype html><html><head><meta charset="utf-8"><title>Flop Runout Cheat Sheet</title><style>
+@page { size: Letter; margin: 12mm; }
+* { box-sizing: border-box; }
+body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1d2125; line-height: 1.35; margin: 0; }
+/* Sizes are in em so one font size per page scales everything on it. */
+.sheet { height: 254mm; overflow: hidden; break-after: page; }
+.sheet:last-child { break-after: auto; }
+.fit { font-size: 12px; }
+h1 { font-size: 2.1em; margin: 0; letter-spacing: -0.01em; }
+.sub { color: #5b6168; margin: 0.2em 0 0.9em; font-size: 1.1em; }
+h2 { font-size: 1.4em; margin: 0 0 0.5em; padding-bottom: 0.2em; border-bottom: 2px solid #127a4f; color: #127a4f; }
+.fit > h2:not(:first-child), .fit > h4 { margin-top: 1em; }
+h4 { margin: 0 0 0.3em; font-size: 1.1em; }
+p { margin: 0 0 0.6em; }
+.ex { font-weight: 400; color: #5b6168; font-size: 0.95em; }
+table { width: 100%; border-collapse: collapse; margin: 0 0 0.6em; }
+th { text-align: left; font-size: 0.78em; color: #5b6168; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.3em 0.4em; border-bottom: 1px solid #cfd2cc; }
+td { padding: 0.35em 0.4em; border-bottom: 1px solid #ecede9; vertical-align: top; }
+.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.big { font-weight: 700; font-size: 1.1em; color: #127a4f; }
+.muted { color: #6b7178; }
+.note { display: block; color: #6b7178; font-size: 0.8em; }
+tr.total td { font-size: 0.9em; color: #3d4248; border-bottom: 0; }
+tr.group td { border-top: 1.5px solid #cfd2cc; }
+.typecard { border: 1px solid #dfe1dc; border-radius: 0.5em; padding: 0.6em 0.8em 0.1em; margin-bottom: 0.8em; }
+.typecard h4 { margin: 0 0 0.3em; }
+.typecard table { margin-bottom: 0.5em; }
+.sumcard { display: grid; grid-template-columns: 8.5em 1fr; gap: 0.8em; align-items: center; border: 1px solid #dfe1dc; border-radius: 0.5em; padding: 0.6em 0.8em; margin-bottom: 0.6em; }
+.sum-name span { display: block; color: #6b7178; font-size: 0.85em; }
+.sum-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5em; }
+.stat { background: #f4f6f3; border-radius: 0.4em; padding: 0.35em 0.5em; }
+.stat .lbl { display: block; font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7178; }
+.stat .val { font-size: 0.9em; }
+.stat b { display: block; color: #127a4f; font-size: 1.25em; white-space: nowrap; }
+.box { background: #f1f6f2; border-left: 4px solid #127a4f; border-radius: 4px; padding: 0.6em 0.9em; margin: 0.7em 0; }
+.box p:last-child { margin-bottom: 0; }
+.anchor { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7em; margin: 0.7em 0 1em; }
+.anchor div { border: 1px solid #dfe1dc; border-radius: 0.5em; padding: 0.5em 0.6em; text-align: center; }
+.anchor strong { display: block; font-size: 1.6em; color: #127a4f; }
+.anchor span { font-size: 0.85em; color: #5b6168; }
+.quiz td { padding-top: 0.45em; padding-bottom: 0.45em; }
+ul { margin: 0.3em 0 0.6em 1.2em; padding: 0; }
+li { margin-bottom: 0.35em; }
+.foot { color: #8a9096; font-size: 0.75em; margin-top: 0.8em; }
+</style></head><body>
+${sheets.map((h) => '<section class="sheet"><div class="fit">' + h + '</div></section>').join('\n')}
 </body></html>`;
 
 const outDir = path.join(__dirname, '..', 'docs');
@@ -231,6 +265,23 @@ fs.writeFileSync(path.join(outDir, 'flop-runout-cheatsheet.html'), html);
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: 'load' });
+  // Lay out at the printed page width, then grow each page's text as far as it will go.
+  await page.emulateMedia({ media: 'print' });
+  await page.setViewportSize({ width: Math.round((215.9 - 24) / 25.4 * 96), height: 1200 });
+  const sizes = await page.evaluate(() => [...document.querySelectorAll('.sheet')].map((sheet) => {
+    const fit = sheet.querySelector('.fit');
+    let lo = 8;
+    let hi = 34; // cap so a short page doesn't get comically large
+    for (let i = 0; i < 16; i++) {
+      const mid = (lo + hi) / 2;
+      fit.style.fontSize = mid + 'px';
+      if (fit.scrollHeight <= sheet.clientHeight && fit.scrollWidth <= sheet.clientWidth + 1) lo = mid;
+      else hi = mid;
+    }
+    fit.style.fontSize = lo + 'px';
+    return Math.round(lo * 10) / 10;
+  }));
+  console.error('font size per page (px): ' + sizes.join(', '));
   await page.pdf({ path: path.join(outDir, 'flop-runout-cheatsheet.pdf'), format: 'Letter', printBackground: true, preferCSSPageSize: true });
   await browser.close();
   console.error('wrote docs/flop-runout-cheatsheet.pdf');
