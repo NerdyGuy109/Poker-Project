@@ -453,3 +453,53 @@ test('equity with ranges', () => {
   assert.ok(Math.abs(pre.players[0].equity - 0.82) < 0.01);
   assert.throws(() => P.createEquityJob([{ combos: P.parseRange('AA').combos }, null], [], 'plo'), /hold/);
 });
+
+const S = require('../js/stud.js');
+
+test('razz and stud 8 lows', () => {
+  const razz = (s) => S.razzValue(cards(s));
+  assert.equal(S.describeRazz(razz('As 2d 3c 4h 5s Kd Kc')), '5-4-3-2-A');
+  assert.equal(S.describeRazz(razz('8s 7d 6c 4h 2s Ad 3c')), '6-4-3-2-A');
+  assert.equal(S.describeRazz(razz('Ks Kd Kc Qh Qs Jd Jc')), 'Paired');
+  assert.ok(razz('As 2d 3c 4h 5s') < razz('As 2d 3c 4h 6s'));
+  assert.ok(razz('Ks Qd Jc Th 9s') < razz('As Ad 2c 3h 4s')); // any unpaired hand beats a pair
+  assert.ok(razz('2s 3s 4s 5s 6s') < razz('As 2d 3c 4h 7s')); // flushes and straights don't count
+  assert.equal(S.lowMaskTop(S.eightLow(cards('As 2d 3c 4h 5s Kd Kc'))), 5);
+  assert.equal(S.lowMaskTop(S.eightLow(cards('8s 7d 6c 4h 2s Kd Kc'))), 8);
+  assert.equal(S.eightLow(cards('As 2d 3c 9h Ts Kd Kc')), Infinity);
+});
+
+test('stud hand odds by seventh street', () => {
+  // Rolled-up trips make a full house or better about 40% of the time.
+  const trips = S.analyzeHand(cards('7s 7d 7c'), [], 'stud');
+  assert.equal(trips.runouts, 211876);
+  assert.ok(Math.abs(trips.high[P.HAND.FULL_HOUSE] - 0.40) < 0.02);
+  // Three different low cards in razz: two more different cards 8 or lower in four cards (48.3%).
+  const razz = S.analyzeHand(cards('As 2d 3c'), [], 'razz');
+  assert.equal(razz.low['8'].toFixed(4), '0.4827');
+  // Dead cards matter: with the fours, fives and sixes gone, an 8-low is much harder.
+  const dead = S.analyzeHand(cards('As 2d 3c'), cards('4s 4h 4d 4c 5s 5h 5d 5c 6s 6h'), 'razz');
+  assert.ok(dead.low['8'] < razz.low['8'] - 0.2);
+  assert.equal(S.describeStart(cards('Ks 4d Kc'), 'stud'), 'Split pair of kings (one shows)');
+  assert.equal(S.describeStart(cards('9h 8h 7h'), 'stud'), 'Three to a straight flush (9-8-7)');
+  assert.throws(() => S.analyzeHand(cards('As 2d 3c'), cards('As'), 'razz'), /twice/);
+});
+
+test('stud equity', () => {
+  const eq = (ps, g) => S.createEquityJob(ps.map(cards), [], g).run();
+  // Six cards each: 40 x 39 ways to finish, all checked; the made flush wins every time.
+  const late = eq(['As Ad Kc Qd 7h 2s', 'Qh Jh Th 9h 2h 3c'], 'stud');
+  assert.ok(late.exact);
+  assert.equal(late.runouts, 40 * 39);
+  assert.deepEqual(late.players.map((p) => p.equity), [0, 1]);
+  // Seventh street, everything known: one deal.
+  const done = eq(['As 2d 3c 4h 5s Kd Kc', '6s 6d 7c 8h 9s Qd Jc'], 'razz');
+  assert.equal(done.runouts, 1);
+  assert.deepEqual(done.players.map((p) => p.equity), [1, 0]);
+  // Stud 8: wheel scoops (best low and a straight for high) against two pair.
+  const split = eq(['As 2d 3c 4h 5s Kd Qc', 'Ks Kh Qd Qh 9s 9d 8c'], 'stud8');
+  assert.deepEqual(split.players.map((p) => p.equity), [1, 0]);
+  assert.equal(split.players[0].win, 1);
+  const charts = require('../js/studcharts.js');
+  assert.equal(charts.lowStarts.length, 120);
+});

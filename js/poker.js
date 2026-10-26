@@ -279,6 +279,10 @@
     // Draw games have no board, so none of the board analysis applies; js/lowball.js handles them.
     '27sd': { id: '27sd', name: '2-7 single draw', short: '2-7 SD', holeCards: 5, draw: 1, categoryIds: [], names: {} },
     '27td': { id: '27td', name: '2-7 triple draw', short: '2-7 TD', holeCards: 5, draw: 3, categoryIds: [], names: {} },
+    // Stud games: seven cards each and no board; js/stud.js handles them.
+    stud: { id: 'stud', name: 'Seven-card stud', short: 'Stud', holeCards: 7, stud: true, categoryIds: [], names: {} },
+    stud8: { id: 'stud8', name: 'Stud hi-lo (8 or better)', short: 'Stud 8', holeCards: 7, stud: true, categoryIds: [], names: {} },
+    razz: { id: 'razz', name: 'Razz', short: 'Razz', holeCards: 7, stud: true, categoryIds: [], names: {} },
   };
 
   function categoryName(id, gameId) {

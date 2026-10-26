@@ -26,7 +26,8 @@
   const catById = Object.fromEntries(P.CATEGORIES.map((c) => [c.id, c]));
   const game = () => P.GAMES[state.game];
   const isOmaha = () => state.game !== 'nlhe';
-  const isDraw = () => !!game().draw;
+  // Draw and stud games have no board; they share one view ('draw') instead of the board views.
+  const isDraw = () => !!(game().draw || game().stud);
   const BOARD_VIEWS = ['range', 'equity', 'runouts'];
 
   // Draw games have no board: their Draw view replaces the board views (and back again).
@@ -45,6 +46,9 @@
     plo5: 'Five hole cards; every hand must still use exactly two of them with three board cards.',
     '27sd': 'Five cards and one draw; the lowest hand wins, with aces high and straights and flushes counting against you.',
     '27td': 'Five cards and three draws; the lowest hand wins, with aces high and straights and flushes counting against you.',
+    stud: 'Seven cards each (three down, four up) and no board; the best five-card high hand wins.',
+    stud8: 'Seven cards each and no board; the pot splits between the best high and the best 8-or-better low.',
+    razz: 'Seven cards each and no board; the lowest five-card hand wins, with aces low and straights and flushes not counting.',
     bigo: 'Five hole cards, exactly two used for each half. Split pot like PLO8: best high and best low (five different cards 8 or lower, aces low).',
   };
 
@@ -580,6 +584,12 @@
       tab.classList.toggle('active', on);
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
     }
+    // On phones the game tabs scroll sideways; keep the chosen one in view.
+    const tabs = $('game-tabs');
+    const active = tabs.querySelector('.active');
+    if (active && tabs.scrollWidth > tabs.clientWidth) {
+      tabs.scrollLeft = Math.max(0, active.offsetLeft - (tabs.clientWidth - active.offsetWidth) / 2);
+    }
     $('game-note').innerHTML = '<strong>' + game().name + ':</strong> ' + GAME_NOTES[state.game];
     $('check-text').placeholder = game().holeCards === 5 ? 'e.g. As Ks Qd Jd 9c' : 'e.g. As Ks Qd Jd';
     for (const tab of document.querySelectorAll('[data-view]')) {
@@ -587,11 +597,21 @@
       tab.classList.toggle('active', on);
       tab.setAttribute('aria-selected', on ? 'true' : 'false');
       if (BOARD_VIEWS.includes(tab.dataset.view)) tab.hidden = isDraw();
-      if (tab.dataset.view === 'draw') tab.hidden = !isDraw();
+      if (tab.dataset.view === 'draw') {
+        tab.hidden = !isDraw();
+        tab.textContent = game().stud ? 'Stud' : 'Draw';
+      }
     }
     const draw = state.view === 'draw';
     $('draw-panel').hidden = !draw;
-    if (draw) window.DrawGame.render($('draw-panel'), state.game);
+    if (draw) {
+      // Draw and stud pages share this panel, so start fresh whenever the game changes.
+      if ($('draw-panel').dataset.game !== state.game) {
+        $('draw-panel').innerHTML = '';
+        $('draw-panel').dataset.game = state.game;
+      }
+      (game().stud ? window.StudGame : window.DrawGame).render($('draw-panel'), state.game);
+    }
     $('range-layout').hidden = state.view !== 'range';
     $('equity-panel').hidden = state.view !== 'equity';
     $('runout-panel').hidden = state.view !== 'runouts';

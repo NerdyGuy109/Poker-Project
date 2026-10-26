@@ -590,3 +590,14 @@ body.busy { cursor: progress; }
 }
 .range-cell.on:hover:not(:disabled) { background: var(--accent); }
 .range-cell:not(.on):hover:not(:disabled) { background: var(--button-hover); }
+
+/* ---------- Stud games ---------- */
+
+.sg-form { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; margin: 6px 0; }
+.sg-form .mn-field input, .sg-dead-row .mn-field input { width: 210px; }
+.sg-dead-row { margin-top: 12px; }
+.sg-card { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sg-card.down .card { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px color-mix(in srgb, var(--muted) 45%, transparent); }
+.sg-card.down .dg-card-tag { color: var(--muted); }
+.sg-odds td { padding-right: 18px; }
+.sg-odds tr.sg-group td { font-weight: 700; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 12px; border-top: 0; }
