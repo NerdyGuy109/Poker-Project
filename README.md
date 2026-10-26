@@ -172,3 +172,26 @@ If a hand is in more than one highlighted group, it takes the color of the first
 - `tools/`: scripts that build the precomputed charts and the runout PDF
 - `docs/`: the flop runout cheat sheet (PDF and HTML)
 - `tests/`: unit tests, run with `npm test` (Node 18+)
+
+## Copyright and license
+
+Copyright (c) 2026 NerdyGuy109. All rights reserved. No permission is granted to copy, modify, host or redistribute this project or any part of it without written permission. See [LICENSE](LICENSE).
+
+## Hosting privately with Cloudflare
+
+The site is plain static files (no build step), so it can be hosted on Cloudflare Pages and put behind Cloudflare Access so only invited people can open it. Cloudflare's menus change from time to time, so see [Cloudflare Pages](https://developers.cloudflare.com/pages/) and [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-public-app/) if a step looks different.
+
+1. **Make the GitHub repository private** (Settings → General → Change visibility).
+2. **Create the Pages project:** in the Cloudflare dashboard, open **Workers & Pages → Create → Pages → Connect to Git**, and pick this repository and the branch `claude/poker-hand-evaluator-etjd7k`.
+   - **Framework preset:** None.
+   - **Build command:** leave empty.
+   - **Build output directory:** `/`.
+
+   Deploy, and Cloudflare gives the site an address like `your-project.pages.dev`. It redeploys automatically on every push.
+3. **Restrict access:** open **Zero Trust → Access → Applications → Add an application → Self-hosted**.
+   - **Domain:** enter the `.pages.dev` address. Add `*.your-project.pages.dev` as well so preview deployments are protected too.
+   - **Policy:** an **Allow** policy whose rule is **Emails** with the addresses you want to let in. For login, choose **One-time PIN**.
+4. **Test the link in a private browser window:** it should ask for an email and send a code, and only listed emails should get in.
+
+To add or remove people later, edit the email list in that Access policy.
+

@@ -601,3 +601,7 @@ body.busy { cursor: progress; }
 .sg-card.down .dg-card-tag { color: var(--muted); }
 .sg-odds td { padding-right: 18px; }
 .sg-odds tr.sg-group td { font-weight: 700; color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 12px; border-top: 0; }
+
+/* ---------- Footer ---------- */
+
+.site-footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 28px; color: var(--muted); font-size: 0.8rem; text-align: center; }

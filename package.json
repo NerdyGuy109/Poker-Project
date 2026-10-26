@@ -2,6 +2,7 @@
   "name": "poker-board-analyzer",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "Static website for evaluating poker boards and counting hand combos.",
   "scripts": {
     "test": "node --test tests/*.test.js"
