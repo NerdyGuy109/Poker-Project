@@ -190,13 +190,13 @@ h2 { break-after: avoid; }
 <h2>1 &middot; How often each flop comes</h2>
 <div class="cols2"><div>${freq}</div><div class="box" style="margin-top:0"><p><strong>Out of 22,100 possible flops.</strong></p><p>More than half of all flops are two-tone, and about 1 in 6 is paired. Monotone flops come about 1 time in 19; trips about 1 in 425.</p><p>Every number on these pages is exact, counted over every flop, turn and river.</p></div></div>
 
-<h2>2 &middot; Flush runouts</h2>
+<h2 class="page">2 &middot; Flush runouts</h2>
 ${suits}
 
-<h2>3 &middot; Pairing runouts</h2>
+<h2 class="page">3 &middot; Pairing runouts</h2>
 ${pairs}
 
-<h2>4 &middot; Straight runouts</h2>
+<h2 class="page">4 &middot; Straight runouts</h2>
 <p>Straight odds depend on how connected the ranks are, so these are averages over every unpaired flop of each kind, with the lowest and highest value in that group. &ldquo;Straight possible&rdquo; means three board cards fit in one five-card straight, so two hole cards can make it.</p>
 ${connTable}
 <div class="cols2">
@@ -204,10 +204,10 @@ ${connTable}
   <div>${gapTable}</div>
 </div>
 
-<h2>5 &middot; One line per flop type</h2>
+<h2 class="page">5 &middot; One line per flop type</h2>
 ${summary}
 
-<h2>Memory tips</h2>
+<h2 class="page">Memory tips</h2>
 <ul>
   <li><strong>Count cards, then double:</strong> on the turn each card is about 2% (exactly 2.04%). 9 cards &asymp; 18%, 11 &asymp; 22%, 12 &asymp; 24.5%, 36 &asymp; 73.5%.</li>
   <li><strong>The board pairs by the river about 39% of the time</strong> (38.8%) on any unpaired flop, roughly 2 times in 5.</li>

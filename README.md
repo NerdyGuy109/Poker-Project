@@ -115,7 +115,7 @@ Switch to **Math** for notes, live calculators and charts:
 
 ## Flop runout cheat sheet (PDF)
 
-[`docs/flop-runout-cheatsheet.pdf`](docs/flop-runout-cheatsheet.pdf) is a three-page printable sheet of generic turn and river odds for each flop type, made for memorizing. It covers:
+[`docs/flop-runout-cheatsheet.pdf`](docs/flop-runout-cheatsheet.pdf) is a printable sheet (one section per page) of generic turn and river odds for each flop type, made for memorizing. It covers:
 
 - **Flop frequencies:** how often each flop type comes.
 - **Flush runouts:** rainbow, two-tone and monotone flops.
