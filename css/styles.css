@@ -725,3 +725,73 @@ body.busy { cursor: progress; }
   .pl-pos { white-space: nowrap; font-size: 0.8rem; }
 }
 .pl-row .mn-field.pl-wide { flex: 2; min-width: 220px; }
+
+/* ---------- Player book: profile page ---------- */
+
+.pl-nav .pl-back { font-size: 1rem; font-weight: 600; padding: 4px 2px; }
+.pl-nav button[data-act="prev"], .pl-nav button[data-act="next"] { font-size: 1.1rem; padding: 4px 12px; }
+.pb-name { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; margin: 6px 0 4px; }
+.pb-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pb-type { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 10px; border-radius: 5px; }
+.pb-dots { display: inline-flex; gap: 3px; }
+.pb-dots span { width: 11px; height: 11px; border-radius: 50%; background: var(--cell-bg); border: 1px solid var(--panel-border); }
+.pb-dots span.on { background: #c0353c; border-color: #c0353c; }
+.pb-dots.small span { width: 8px; height: 8px; }
+.pb-summary { color: var(--muted); font-size: 1rem; line-height: 1.5; margin: 0 0 12px; max-width: 760px; }
+.pb-rule { border: 0; border-top: 2px solid var(--text); margin: 4px 0 14px; }
+.pb-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); border: 1px solid var(--panel-border); border-radius: 8px; overflow: hidden; }
+.pb-facts > div { padding: 10px 12px; border-right: 1px solid var(--panel-border); border-bottom: 1px solid var(--panel-border); margin: 0 -1px -1px 0; }
+.pb-fact-k { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; }
+.pb-fact-v { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.95rem; white-space: pre-wrap; margin-top: 2px; }
+.pb-h { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 800; margin: 24px 0 8px; }
+.pb-leak { border-left: 4px solid #c0353c; background: var(--panel); border-top: 1px solid var(--panel-border); border-right: 1px solid var(--panel-border); border-bottom: 1px solid var(--panel-border); border-radius: 0 8px 8px 0; padding: 10px 14px; margin-bottom: 8px; }
+.pb-leak p { margin: 0; }
+.pb-leak-t { font-weight: 650; }
+.pb-exploit { color: var(--accent); margin-top: 4px !important; }
+.pb-suggest { margin-top: 8px; font-size: 0.92rem; }
+.pb-suggest summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.pb-suggest ul { margin: 6px 0 0 18px; padding: 0; }
+.pb-suggest li { margin-bottom: 4px; }
+.pb-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0 4px; }
+.pb-text { background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; line-height: 1.5; }
+.pb-plan { border: 1.5px dashed var(--panel-border); border-radius: 8px; padding: 12px 14px; color: var(--muted); line-height: 1.5; }
+.pb-addnote { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: color-mix(in srgb, var(--accent) 9%, transparent); border-radius: 10px; padding: 12px; }
+.pb-addnote select, .pb-addnote input, .pb-addnote textarea { font: inherit; font-size: 0.95rem; color: var(--text); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.pb-addnote textarea, .pb-addnote button { grid-column: 1 / -1; }
+.pb-addnote textarea { resize: vertical; }
+.pb-addnote button { padding: 10px; font-weight: 650; }
+.pb-notes { list-style: none; margin: 10px 0 0; padding: 0; }
+.pb-notes li { padding: 10px 0; border-bottom: 1px solid var(--panel-border); }
+.pb-notes p { margin: 4px 0 0; white-space: pre-wrap; line-height: 1.45; }
+.pb-note-meta { display: flex; gap: 12px; align-items: baseline; }
+.pb-note-date { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; color: var(--muted); }
+.pb-note-cat { font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: #a46a00; }
+.pb-note-cat.cat-tell { color: #b14cff; }
+.pb-note-cat.cat-showdown { color: #a46a00; }
+.pb-note-cat.cat-sizing { color: #2a78d6; }
+.pb-note-cat.cat-tilt { color: #c0353c; }
+.pb-note-del { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
+.pl-summary { font-size: 0.8rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pl-item-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+/* Player book: edit page */
+.pl-area { flex: 1; min-width: 220px; display: flex; flex-direction: column; margin-bottom: 8px; }
+.pl-area textarea, .pl-editor select { font: inherit; font-size: 0.92rem; color: var(--text); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 7px; padding: 6px 9px; resize: vertical; font-weight: 400; }
+.pl-priority { display: inline-flex; gap: 3px; background: var(--button-bg); border-radius: 8px; padding: 3px; }
+.pl-priority button { background: transparent; padding: 4px 10px; }
+.pl-priority button.on { background: #c0353c; color: #fff; font-weight: 700; }
+.pl-leaks { display: grid; gap: 8px; margin-bottom: 8px; }
+.pl-leak-edit { display: grid; gap: 6px; border-left: 4px solid #c0353c; padding: 8px 10px; border-radius: 0 8px 8px 0; background: color-mix(in srgb, var(--cell-bg) 40%, transparent); }
+.pl-leak-edit input, .pl-leak-edit textarea { font: inherit; font-size: 0.92rem; color: var(--text); background: var(--panel); border: 1px solid var(--panel-border); border-radius: 7px; padding: 6px 9px; }
+.pl-leak-edit input { font-weight: 600; }
+.pl-leak-edit .link { justify-self: start; color: var(--muted); font-size: 0.8rem; }
+.pl-foot .primary { margin-left: auto; }
+@media (max-width: 560px) {
+  .pb-name { font-size: 1.9rem; }
+  .pb-facts { grid-template-columns: 1fr 1fr; }
+  .pb-addnote { grid-template-columns: 1fr; }
+}
+.panel .pl-editor h2.pb-name { font-size: 2.1rem; margin: 6px 0 4px; }
+@media (max-width: 560px) { .panel .pl-editor h2.pb-name { font-size: 1.9rem; } }
+.pl-editor .mn-field select { width: 100%; max-width: 420px; }
+.pl-priority button[data-priority="0"].on { background: var(--panel); color: var(--muted); }

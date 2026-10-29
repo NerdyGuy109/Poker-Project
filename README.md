@@ -115,18 +115,28 @@ The guide draws on Mike Caro's *Book of Poker Tells*, Joe Navarro's *Read 'Em an
 
 ## Player notes
 
-The **Players** tab keeps notes on the people you play with.
+The **Players** tab is a player book for the people you play with.
 
-- **Player list:** search names and notes, filter by format (cash / tournament) and game (NL Hold'em / Omaha / Mixed games), and sort by name or most recently updated. Each entry shows a type badge (TAG, LAG, Nit, Station, Maniac), format and games, and top tendencies.
-- **Profile:**
-  - **Basics:** name, description (e.g. "Seat 4, red cap"), appearance (to recognize them), where they're from, where they play and stakes.
-  - **Format and games:** cash and/or tournament; NL Hold'em, Omaha and/or Mixed games.
-  - **Style switches:** loose / tight, aggressive / passive, smart / dumb, stoic / tellbox, bluffy / honest, each with a "Not sure" middle.
-  - **Tendency checkboxes:** preflop, postflop (including *raises flops with flush draws* and *overplays overpairs*), mental and table, and tournament.
-  - **How to play against them:** a list of adjustments generated from what you've ticked.
-  - **Notes and hand log:** free notes, plus a dated hand log.
-  - **Tells tally:** tells confirmed at showdown, with "reliable" or "mixed" verdicts.
-- **Quick updates:** **Prev / Next** steps through the (filtered) list. Everything saves automatically. On phones the list and the profile show one at a time.
+- **Player list:** search everything you've written, filter by format (cash / tournament) and game (NL Hold'em / Omaha / Mixed games), and sort by recently updated, priority or name. Each entry shows the player's type, priority dots and summary.
+- **Profile page (read first, built for the table):**
+  - **Header:** name, a type badge (e.g. *Maniac / splashy aggro*) and 1–5 priority dots.
+  - **Summary:** a one-paragraph summary.
+  - **Key facts:** Stack (buy-ins), Seat (where to sit), Bluffs (low / medium / high), what they play, where, looks and where they're from.
+  - **Leaks and how to exploit them:** cards you write, with optional suggestions generated from their style switches and tendencies.
+  - **Write-ups:** Live tells, Bet sizing, Preflop, Postflop, Tilt / mood and General notes.
+  - **Default plan for their type.**
+  - **Notes:** quick notes with a category (Live tell, Showdown, Bet sizing, Preflop, Postflop, Tilt / mood, Other) and a date, newest first.
+  - **Tells tally:** tells confirmed at showdown.
+- **Edit profile:**
+  - **Type:** choose one, or let it follow the style switches (LAG, TAG, Nit, Calling station, Maniac).
+  - **Priority, summary and key facts.**
+  - **Leak / exploit pairs.**
+  - **Style switches:** loose/tight, aggressive/passive, smart/dumb, stoic/tellbox, bluffy/honest.
+  - **Tendency checkboxes.**
+  - **Write-ups.**
+
+  New players open straight into Edit.
+- **Quick navigation:** the ‹ › buttons step through the (filtered) list. Everything saves automatically. On phones the list and the profile show one at a time.
 - **Backups:** notes are stored in each browser separately, so use **Export notes** to save a backup file and **Import** to load it on another device. Importing merges, keeping the newer copy of each player.
 
 ## Poker math

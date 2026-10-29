@@ -536,7 +536,7 @@ test('player notes: types, advice, search, merge and migration', () => {
   const p = PL.newPlayer('Mike');
   p.style.looseTight = 'loose';
   p.style.aggPass = 'passive';
-  assert.equal(PL.playerType(p), 'Calling station (loose-passive)');
+  assert.equal(PL.playerType(p), 'Calling station');
   assert.equal(PL.typeBadge(p), 'Station');
   p.tendencies['raises-flush-draws'] = true;
   p.tendencies['overplays-overpairs'] = true;
@@ -546,32 +546,53 @@ test('player notes: types, advice, search, merge and migration', () => {
   p.style.aggPass = 'aggressive';
   p.style.honesty = 'bluffy';
   assert.match(PL.playerType(p), /Maniac/);
+  // A chosen type wins over the style switches, and brings its default plan.
+  p.type = 'fish';
+  assert.equal(PL.resolvedType(p).label, 'Fish / recreational');
+  assert.match(PL.resolvedType(p).plan, /Isolate/);
+  p.type = 'auto';
+  assert.equal(PL.resolvedType(p).id, 'maniac');
 
   const q = PL.newPlayer('Sarah');
   q.formats.tournament = true;
   q.games.omaha = true;
-  q.notes = 'Snap-calls with any flush draw';
-  assert.deepEqual(PL.filterPlayers([p, q], { text: 'flush' }).map((x) => x.name), ['Sarah']);
+  q.priority = 4;
+  q.sections.postflop = 'Snap-calls with any flush draw';
+  q.leaks.push({ id: 'l1', leak: 'Stacks off with one pair', exploit: 'Raise two pair+' });
+  assert.deepEqual(PL.filterPlayers([p, q], { text: 'flush draw' }).map((x) => x.name), ['Sarah']);
+  assert.deepEqual(PL.filterPlayers([p, q], { text: 'one pair' }).map((x) => x.name), ['Sarah']);
   q.appearance = 'Tall, grey beard, Steelers cap';
   q.origin = 'Pittsburgh';
   assert.deepEqual(PL.filterPlayers([p, q], { text: 'steelers' }).map((x) => x.name), ['Sarah']);
   assert.deepEqual(PL.filterPlayers([p, q], { text: 'pittsburgh' }).map((x) => x.name), ['Sarah']);
-  assert.equal(PL.normalize({ name: 'Old save' }).appearance, ''); // older saves get the new fields
   assert.deepEqual(PL.filterPlayers([p, q], { format: 'tournament' }).map((x) => x.name), ['Sarah']);
   assert.deepEqual(PL.filterPlayers([p, q], { game: 'nlhe' }), []);
   assert.deepEqual(PL.sortPlayers([q, p], 'name').map((x) => x.name), ['Mike', 'Sarah']);
+  assert.deepEqual(PL.sortPlayers([p, q], 'priority').map((x) => x.name), ['Sarah', 'Mike']);
+
+  // Notes: newest date first, then most recently added; old entries get a category and short date.
+  const n = PL.normalize({ name: 'Notes', notes: 'general stuff', log: [
+    { id: 'a', date: '2026-10-20T10:00:00.000Z', text: 'old style entry' },
+    { id: 'b', date: '2026-10-26', category: 'tell', text: 'finger check' },
+    { id: 'c', date: '2026-10-26', category: 'showdown', text: 'showed air' },
+  ] });
+  assert.deepEqual(PL.sortedLog(n).map((e) => e.id), ['c', 'b', 'a']);
+  assert.equal(n.log[0].category, 'other');
+  assert.equal(n.log[0].date, '2026-10-20');
+  assert.equal(n.sections.notes, 'general stuff'); // the old notes box moves into the sections
+  assert.equal(PL.normalize({ name: 'Old save' }).appearance, '');
 
   // Importing keeps the newer copy of each player and adds new ones.
-  const older = Object.assign({}, q, { notes: 'old', updated: '2000-01-01T00:00:00.000Z' });
+  const older = Object.assign({}, q, { summary: 'old', updated: '2000-01-01T00:00:00.000Z' });
   const merged = PL.mergePlayers([q], [older, { name: 'Imported', id: 'x1', updated: '2030-01-01T00:00:00.000Z' }]);
   assert.equal(merged.length, 2);
-  assert.equal(merged.find((x) => x.id === q.id).notes, q.notes);
+  assert.equal(merged.find((x) => x.id === q.id).summary, q.summary);
   assert.deepEqual(merged.find((x) => x.id === 'x1').log, []);
 
   // Players from the old notebook carry over with their notes and tells tally.
   const migrated = PL.migrateOld({ players: [{ id: 'p1', name: 'Seat 4', notes: 'chatty', tells: { freeze: { strong: 0, weak: 3 } } }] });
   assert.equal(migrated[0].name, 'Seat 4');
-  assert.equal(migrated[0].notes, 'chatty');
+  assert.equal(migrated[0].sections.notes, 'chatty');
   assert.equal(migrated[0].tells.freeze.weak, 3);
   assert.deepEqual(migrated[0].style, {});
 });
