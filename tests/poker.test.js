@@ -530,3 +530,43 @@ test('double-board bomb pot: ratings and simulation', () => {
   assert.ok(sim.equity > 0.9);
   assert.equal(sim.trials, 300);
 });
+
+test('player notes: types, advice, search, merge and migration', () => {
+  const PL = require('../js/players.js');
+  const p = PL.newPlayer('Mike');
+  p.style.looseTight = 'loose';
+  p.style.aggPass = 'passive';
+  assert.equal(PL.playerType(p), 'Calling station (loose-passive)');
+  assert.equal(PL.typeBadge(p), 'Station');
+  p.tendencies['raises-flush-draws'] = true;
+  p.tendencies['overplays-overpairs'] = true;
+  const tips = PL.adjustments(p);
+  assert.ok(tips.some((t) => /flush draw/.test(t)));
+  assert.ok(tips.some((t) => /two pair and sets/.test(t)));
+  p.style.aggPass = 'aggressive';
+  p.style.honesty = 'bluffy';
+  assert.match(PL.playerType(p), /Maniac/);
+
+  const q = PL.newPlayer('Sarah');
+  q.formats.tournament = true;
+  q.games.omaha = true;
+  q.notes = 'Snap-calls with any flush draw';
+  assert.deepEqual(PL.filterPlayers([p, q], { text: 'flush' }).map((x) => x.name), ['Sarah']);
+  assert.deepEqual(PL.filterPlayers([p, q], { format: 'tournament' }).map((x) => x.name), ['Sarah']);
+  assert.deepEqual(PL.filterPlayers([p, q], { game: 'nlhe' }), []);
+  assert.deepEqual(PL.sortPlayers([q, p], 'name').map((x) => x.name), ['Mike', 'Sarah']);
+
+  // Importing keeps the newer copy of each player and adds new ones.
+  const older = Object.assign({}, q, { notes: 'old', updated: '2000-01-01T00:00:00.000Z' });
+  const merged = PL.mergePlayers([q], [older, { name: 'Imported', id: 'x1', updated: '2030-01-01T00:00:00.000Z' }]);
+  assert.equal(merged.length, 2);
+  assert.equal(merged.find((x) => x.id === q.id).notes, q.notes);
+  assert.deepEqual(merged.find((x) => x.id === 'x1').log, []);
+
+  // Players from the old notebook carry over with their notes and tells tally.
+  const migrated = PL.migrateOld({ players: [{ id: 'p1', name: 'Seat 4', notes: 'chatty', tells: { freeze: { strong: 0, weak: 3 } } }] });
+  assert.equal(migrated[0].name, 'Seat 4');
+  assert.equal(migrated[0].notes, 'chatty');
+  assert.equal(migrated[0].tells.freeze.weak, 3);
+  assert.deepEqual(migrated[0].style, {});
+});

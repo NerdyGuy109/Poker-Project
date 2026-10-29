@@ -1,12 +1,10 @@
 /*
- * Live tells guide and player notebook.
+ * Live tells guide (player notes, including a tells tally, are in js/players.js).
  * Content draws on Mike Caro's "Book of Poker Tells", Joe Navarro's "Read 'Em and Reap",
  * Zachary Elwood's "Reading Poker Tells", and Slepian et al. (2013, Psychological Science).
  */
 (function () {
   'use strict';
-
-  const STORAGE_KEY = 'poker-analyzer-tells-v1';
 
   const AREAS = {
     eyes: 'Eyes',
@@ -195,32 +193,9 @@
     { title: 'Start with a baseline', text: 'Watch how a player behaves when nothing is at stake. A tell is a change from that baseline, not a behaviour on its own.' },
     { title: 'Look for clusters', text: 'One gesture means little; two or three pointing the same way (freeze + compressed lips + going quiet) mean much more.' },
     { title: 'Involuntary beats acted', text: 'Stress and comfort signals leak out unintentionally. Deliberate displays are acts, and acts usually mean the opposite of the hand.' },
-    { title: 'Confirm at showdown', text: 'Only trust a tell for a player once you have seen it match their cards. Use the notebook below to keep score.' },
+    { title: 'Confirm at showdown', text: 'Only trust a tell for a player once you have seen it match their cards. Keep score in each player\u2019s notes (Players tab).' },
     { title: 'Use it as a tiebreaker', text: 'Let tells tip close decisions; don’t let them override clear math. Experienced players may fake tells on purpose.' },
   ];
-
-  // ---------------------------------------------------------------------------
-  // Notebook storage (this browser only)
-  // ---------------------------------------------------------------------------
-
-  let book = { players: [], current: null };
-
-  function load() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (saved && Array.isArray(saved.players)) book = saved;
-    } catch (e) { /* storage unavailable */ }
-  }
-
-  function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(book));
-    } catch (e) { /* storage unavailable */ }
-  }
-
-  const currentPlayer = () => book.players.find((p) => p.id === book.current) || null;
-
-  const escapeHTML = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ---------------------------------------------------------------------------
   // Rendering
@@ -255,53 +230,8 @@
     for (const b of root.querySelectorAll('[data-area]')) b.classList.toggle('active', b.dataset.area === areaFilter);
   }
 
-  function renderNotebook() {
-    const el = root.querySelector('#tell-notebook');
-    const p = currentPlayer();
-    const options = book.players.map((pl) =>
-      '<option value="' + pl.id + '"' + (pl.id === book.current ? ' selected' : '') + '>' + escapeHTML(pl.name) + '</option>').join('');
-
-    let body = '';
-    if (!p) {
-      body = '<p class="hint">Add a player (a name, seat or description like &ldquo;Seat 4, red cap&rdquo;) to start a baseline.</p>';
-    } else {
-      const rows = TELLS.map((t) => {
-        const c = p.tells[t.id] || { strong: 0, weak: 0 };
-        const total = c.strong + c.weak;
-        let lean = '';
-        if (total) {
-          const share = Math.max(c.strong, c.weak) / total;
-          const way = c.strong >= c.weak ? 'strong' : 'weak';
-          lean = total >= 3 && share >= 0.75 ? '<span class="lean ' + way + '">Reliable: means ' + way + '</span>'
-            : total >= 3 ? '<span class="lean mixed">Mixed: not reliable</span>'
-              : '<span class="lean">Need more showdowns</span>';
-        }
-        return '<tr' + (total ? ' class="seen"' : '') + '><td>' + t.title + ' <span class="muted">(' + (t.side === 'strong' ? 'usually strong' : 'usually weak') + ')</span></td>' +
-          '<td class="nb-count"><button type="button" class="nb-btn strong" data-log="' + t.id + '" data-way="strong" title="Saw it, and they turned out strong">Strong +</button><span>' + c.strong + '</span></td>' +
-          '<td class="nb-count"><button type="button" class="nb-btn weak" data-log="' + t.id + '" data-way="weak" title="Saw it, and they turned out weak">Weak +</button><span>' + c.weak + '</span></td>' +
-          '<td>' + lean + (total ? ' <button type="button" class="link" data-reset="' + t.id + '">reset</button>' : '') + '</td></tr>';
-      }).join('');
-      body =
-        '<label class="nb-label" for="nb-notes">Baseline notes for ' + escapeHTML(p.name) + '</label>' +
-        '<textarea id="nb-notes" rows="3" placeholder="e.g. Always chatty, stacks chips while waiting, rarely looks at others, leg bounces constantly">' + escapeHTML(p.notes || '') + '</textarea>' +
-        '<p class="nb-label">Log a tell when a showdown shows what they had</p>' +
-        '<div class="nb-table-wrap"><table class="nb-table"><thead><tr><th>Tell</th><th>Had it strong</th><th>Had it weak</th><th>For this player</th></tr></thead>' +
-        '<tbody>' + rows + '</tbody></table></div>' +
-        '<p class="hint">After three or more sightings, a tell that matched the same way at least 75% of the time is marked reliable for this player.</p>' +
-        '<button type="button" class="ghost nb-delete" id="nb-delete">Delete ' + escapeHTML(p.name) + '</button>';
-    }
-
-    el.innerHTML =
-      '<div class="nb-bar">' +
-        (book.players.length ? '<select id="nb-player" aria-label="Player">' + options + '</select>' : '') +
-        '<form id="nb-add" class="nb-add"><input id="nb-name" type="text" placeholder="New player name or seat" autocomplete="off" maxlength="40">' +
-        '<button type="submit">Add player</button></form>' +
-      '</div>' + body;
-  }
-
   function render(container) {
     root = container;
-    load();
     root.innerHTML =
       '<div class="panel-head"><h2>Reading tells</h2><span class="hint">Live-poker body language: what to look for, and how to check it against each player.</span></div>' +
 
@@ -313,7 +243,7 @@
         '<div class="stress-card" style="--stress:' + s.color + '"><h4>' + s.name + '</h4><p>' + s.look + '</p><p class="stress-reads">' + s.reads + '</p></div>').join('') + '</div>' +
 
       '<h3 class="tell-section">Build a baseline first</h3>' +
-      '<p class="hint">Watch these while the player is not in a hand, or on routine decisions. Write them in the notebook below.</p>' +
+      '<p class="hint">Watch these while the player is not in a hand, or on routine decisions, and write them in the player\u2019s notes.</p>' +
       '<ul class="baseline-list">' + BASELINE.map((b) => '<li>' + b + '</li>').join('') + '</ul>' +
 
       '<h3 class="tell-section">Strength vs weakness</h3>' +
@@ -323,12 +253,11 @@
       '<p class="hint">Dots show how dependable a tell is in general (<span class="tell-dots inline"><span class="on"></span><span class="on"></span><span class="on"></span></span> = most dependable). Open a card for why it works and when it misleads.</p>' +
       '<div class="tell-columns" id="tell-columns"></div>' +
 
-      '<h3 class="tell-section">Player notebook</h3>' +
-      '<p class="hint">Saved in this browser only. Tally what each tell meant when you saw the cards, so you learn which tells are real for each player.</p>' +
-      '<div id="tell-notebook" class="tell-notebook"></div>';
+      '<h3 class="tell-section">Keep notes on players</h3>' +
+      '<p>Each player\u2019s style, tendencies, notes and a tally of the tells you\u2019ve confirmed at showdown live in the <strong>Players</strong> tab.</p>' +
+      '<button type="button" class="primary" id="tells-to-players">Open player notes</button>';
 
     renderTells();
-    renderNotebook();
     bind();
   }
 
@@ -340,51 +269,9 @@
       renderTells();
     });
 
-    const nb = root.querySelector('#tell-notebook');
-    nb.addEventListener('submit', (e) => {
-      if (e.target.id !== 'nb-add') return;
-      e.preventDefault();
-      const name = root.querySelector('#nb-name').value.trim();
-      if (!name) return;
-      const player = { id: 'p' + Date.now().toString(36), name, notes: '', tells: {} };
-      book.players.push(player);
-      book.current = player.id;
-      save();
-      renderNotebook();
-    });
-    nb.addEventListener('change', (e) => {
-      if (e.target.id === 'nb-player') {
-        book.current = e.target.value;
-        save();
-        renderNotebook();
-      }
-    });
-    nb.addEventListener('input', (e) => {
-      if (e.target.id === 'nb-notes') {
-        currentPlayer().notes = e.target.value;
-        save();
-      }
-    });
-    nb.addEventListener('click', (e) => {
-      const p = currentPlayer();
-      const t = e.target;
-      if (!p) return;
-      if (t.dataset.log) {
-        const c = p.tells[t.dataset.log] || (p.tells[t.dataset.log] = { strong: 0, weak: 0 });
-        c[t.dataset.way]++;
-        save();
-        renderNotebook();
-      } else if (t.dataset.reset) {
-        delete p.tells[t.dataset.reset];
-        save();
-        renderNotebook();
-      } else if (t.id === 'nb-delete') {
-        if (!confirm('Delete ' + p.name + ' and all their notes?')) return;
-        book.players = book.players.filter((pl) => pl.id !== p.id);
-        book.current = book.players.length ? book.players[0].id : null;
-        save();
-        renderNotebook();
-      }
+    root.querySelector('#tells-to-players').addEventListener('click', () => {
+      const tab = document.querySelector('[data-view="players"]');
+      if (tab) tab.click();
     });
   }
 
