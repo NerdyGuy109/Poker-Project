@@ -503,3 +503,30 @@ test('stud equity', () => {
   const charts = require('../js/studcharts.js');
   assert.equal(charts.lowStarts.length, 120);
 });
+
+const BP = require('../js/bombpot.js');
+
+test('double-board bomb pot: ratings and simulation', () => {
+  const b1 = cards('Kh 9h 4c');
+  const b2 = cards('Js Ts 2d');
+  assert.throws(() => BP.checkBoards(b1, cards('Kh 2c 3d')), /share/);
+  const an = BP.analyzeBoards(b1, b2);
+  assert.equal(an.total, 163185); // C(46, 4)
+  const r = BP.rankHands(an, 5);
+  // The best made hands are sets on both boards (pocket kings with jacks).
+  const top = an.categoriesOf(r.made[0].index);
+  assert.equal(top[0][0], 'set');
+  assert.equal(top[1][0], 'set');
+  assert.ok(r.made[0].combos > 1); // suit variations are grouped
+  assert.ok(r.draws.length > 0);
+  // Categories agree with the single-board classifier.
+  const h = an.cardsOf(r.draws[0].index);
+  assert.deepEqual(an.categoriesOf(r.draws[0].index)[0], P.classifyOmaha(h, b1, 'plo').categories);
+  // On the river, with everything known and one opponent holding the nuts on both boards, no equity.
+  const river1 = cards('Kh 9h 4c 2c 7s');
+  const river2 = cards('Js Ts 2d 3d Ah');
+  const nuts = cards('Qd Kd Kc Ks'); // the nuts on both boards: trip kings on board 1 (no straight or flush possible) and A-K-Q-J-T on board 2
+  const sim = BP.createSimulation([nuts], river1, river2, 1, 300).run()[0];
+  assert.ok(sim.equity > 0.9);
+  assert.equal(sim.trials, 300);
+});

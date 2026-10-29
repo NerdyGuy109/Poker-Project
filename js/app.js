@@ -26,8 +26,8 @@
   const catById = Object.fromEntries(P.CATEGORIES.map((c) => [c.id, c]));
   const game = () => P.GAMES[state.game];
   const isOmaha = () => state.game !== 'nlhe';
-  // Draw and stud games have no board; they share one view ('draw') instead of the board views.
-  const isDraw = () => !!(game().draw || game().stud);
+  // Draw, stud and bomb pot games don't use the single board; they share one view ('draw') instead.
+  const isDraw = () => !!(game().draw || game().stud || game().bomb);
   const BOARD_VIEWS = ['range', 'equity', 'runouts'];
 
   // Draw games have no board: their Draw view replaces the board views (and back again).
@@ -49,6 +49,7 @@
     stud: 'Seven cards each (three down, four up) and no board; the best five-card high hand wins.',
     stud8: 'Seven cards each and no board; the pot splits between the best high and the best 8-or-better low.',
     razz: 'Seven cards each and no board; the lowest five-card hand wins, with aces low and straights and flushes not counting.',
+    dbbp: 'Everyone antes the bomb and sees two flops with no preflop betting; four cards each, Omaha rules on each board, each board wins half the pot.',
     bigo: 'Five hole cards, exactly two used for each half. Split pot like PLO8: best high and best low (five different cards 8 or lower, aces low).',
   };
 
@@ -599,7 +600,7 @@
       if (BOARD_VIEWS.includes(tab.dataset.view)) tab.hidden = isDraw();
       if (tab.dataset.view === 'draw') {
         tab.hidden = !isDraw();
-        tab.textContent = game().stud ? 'Stud' : 'Draw';
+        tab.textContent = game().stud ? 'Stud' : game().bomb ? 'Bomb pot' : 'Draw';
       }
     }
     const draw = state.view === 'draw';
@@ -610,7 +611,7 @@
         $('draw-panel').innerHTML = '';
         $('draw-panel').dataset.game = state.game;
       }
-      (game().stud ? window.StudGame : window.DrawGame).render($('draw-panel'), state.game);
+      (game().bomb ? window.BombGame : game().stud ? window.StudGame : window.DrawGame).render($('draw-panel'), state.game);
     }
     $('range-layout').hidden = state.view !== 'range';
     $('equity-panel').hidden = state.view !== 'equity';

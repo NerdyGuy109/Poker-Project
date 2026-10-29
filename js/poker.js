@@ -283,6 +283,8 @@
     stud: { id: 'stud', name: 'Seven-card stud', short: 'Stud', holeCards: 7, stud: true, categoryIds: [], names: {} },
     stud8: { id: 'stud8', name: 'Stud hi-lo (8 or better)', short: 'Stud 8', holeCards: 7, stud: true, categoryIds: [], names: {} },
     razz: { id: 'razz', name: 'Razz', short: 'Razz', holeCards: 7, stud: true, categoryIds: [], names: {} },
+    // Double-board bomb pot: PLO on two boards at once; js/bombpot.js handles it.
+    dbbp: { id: 'dbbp', name: 'Double-board bomb pot (PLO)', short: 'DB Bomb', holeCards: 4, bomb: true, categoryIds: [], names: {} },
   };
 
   function categoryName(id, gameId) {
