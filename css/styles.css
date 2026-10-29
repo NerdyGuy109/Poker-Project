@@ -724,3 +724,4 @@ body.busy { cursor: progress; }
   .pl-nav button { padding: 6px 10px; white-space: nowrap; }
   .pl-pos { white-space: nowrap; font-size: 0.8rem; }
 }
+.pl-row .mn-field.pl-wide { flex: 2; min-width: 220px; }

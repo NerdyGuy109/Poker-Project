@@ -126,6 +126,8 @@
       id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       name: name || 'New player',
       description: '',
+      appearance: '',
+      origin: '',
       venue: '',
       stakes: '',
       formats: {},
@@ -162,7 +164,7 @@
       if (filter.format && !p.formats[filter.format]) return false;
       if (filter.game && !p.games[filter.game]) return false;
       if (!q) return true;
-      const hay = [p.name, p.description, p.venue, p.stakes, p.notes, playerType(p)].concat(p.log.map((e) => e.text)).join(' ').toLowerCase();
+      const hay = [p.name, p.description, p.appearance, p.origin, p.venue, p.stakes, p.notes, playerType(p)].concat(p.log.map((e) => e.text)).join(' ').toLowerCase();
       return hay.includes(q);
     });
   }
@@ -244,7 +246,7 @@
       const tags = Object.keys(p.tendencies).filter((k) => p.tendencies[k]).slice(0, 3).map((k) => TENDENCY_NAMES[k]);
       return '<li><button type="button" class="pl-item' + (p.id === state.selected ? ' active' : '') + '" data-pick="' + p.id + '">' +
         '<span class="pl-name">' + esc(p.name) + '</span>' +
-        (p.description ? '<span class="pl-desc">' + esc(p.description) + '</span>' : '') +
+        (p.description || p.origin ? '<span class="pl-desc">' + [p.description, p.origin].filter(Boolean).map(esc).join(' &middot; ') + '</span>' : '') +
         (badges.length ? '<span class="pl-badges">' + badges.map((b) => '<span class="pl-badge">' + esc(b) + '</span>').join('') + '</span>' : '') +
         (tags.length ? '<span class="pl-tags">' + tags.map(esc).join(' &middot; ') + '</span>' : '') +
         '<span class="pl-updated">Updated ' + fmtDate(p.updated) + '</span></button></li>';
@@ -285,6 +287,10 @@
         '<label class="mn-field">Description<input data-field="description" value="' + esc(p.description) + '" placeholder="Seat 4, red cap, always wears headphones"></label>' +
         '<label class="mn-field">Where<input data-field="venue" value="' + esc(p.venue) + '" placeholder="Casino or home game"></label>' +
         '<label class="mn-field">Stakes<input data-field="stakes" value="' + esc(p.stakes) + '" placeholder="e.g. 2/5, $300 MTT"></label>' +
+      '</div>' +
+      '<div class="pl-row">' +
+        '<label class="mn-field pl-wide">Appearance<input data-field="appearance" value="' + esc(p.appearance) + '" placeholder="To recognize them: build, hair, glasses, usual clothes, age range\u2026"></label>' +
+        '<label class="mn-field">From<input data-field="origin" value="' + esc(p.origin) + '" placeholder="Where they\u2019re from"></label>' +
       '</div>' +
       '<div class="pl-row pl-checks">' +
         '<fieldset><legend>Format</legend>' + FORMATS.map(([k, n]) => '<label><input type="checkbox" data-pl-format="' + k + '"' + (p.formats[k] ? ' checked' : '') + '> ' + n + '</label>').join('') + '</fieldset>' +

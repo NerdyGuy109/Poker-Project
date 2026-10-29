@@ -119,7 +119,7 @@ The **Players** tab keeps notes on the people you play with.
 
 - **Player list:** search names and notes, filter by format (cash / tournament) and game (NL Hold'em / Omaha / Mixed games), and sort by name or most recently updated. Each entry shows a type badge (TAG, LAG, Nit, Station, Maniac), format and games, and top tendencies.
 - **Profile:**
-  - **Basics:** name, description (e.g. "Seat 4, red cap"), where they play and stakes.
+  - **Basics:** name, description (e.g. "Seat 4, red cap"), appearance (to recognize them), where they're from, where they play and stakes.
   - **Format and games:** cash and/or tournament; NL Hold'em, Omaha and/or Mixed games.
   - **Style switches:** loose / tight, aggressive / passive, smart / dumb, stoic / tellbox, bluffy / honest, each with a "Not sure" middle.
   - **Tendency checkboxes:** preflop, postflop (including *raises flops with flush draws* and *overplays overpairs*), mental and table, and tournament.

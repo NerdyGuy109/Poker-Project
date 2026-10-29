@@ -552,6 +552,11 @@ test('player notes: types, advice, search, merge and migration', () => {
   q.games.omaha = true;
   q.notes = 'Snap-calls with any flush draw';
   assert.deepEqual(PL.filterPlayers([p, q], { text: 'flush' }).map((x) => x.name), ['Sarah']);
+  q.appearance = 'Tall, grey beard, Steelers cap';
+  q.origin = 'Pittsburgh';
+  assert.deepEqual(PL.filterPlayers([p, q], { text: 'steelers' }).map((x) => x.name), ['Sarah']);
+  assert.deepEqual(PL.filterPlayers([p, q], { text: 'pittsburgh' }).map((x) => x.name), ['Sarah']);
+  assert.equal(PL.normalize({ name: 'Old save' }).appearance, ''); // older saves get the new fields
   assert.deepEqual(PL.filterPlayers([p, q], { format: 'tournament' }).map((x) => x.name), ['Sarah']);
   assert.deepEqual(PL.filterPlayers([p, q], { game: 'nlhe' }), []);
   assert.deepEqual(PL.sortPlayers([q, p], 'name').map((x) => x.name), ['Mike', 'Sarah']);
