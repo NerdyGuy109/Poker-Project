@@ -127,6 +127,8 @@ The **Players** tab is a player book for the people you play with.
   - **Timing:** how fast they act when strong, when bluffing and when drawing (snap, quick, normal, slow, long tank or varies), whether they look back at their cards after making a hand or missing a draw, a box spelling out what their speed gives away, and timing notes.
   - **Default plan for their type.**
   - **Notes:** quick notes with a category (Live tell, Timing, Showdown, Bet sizing, Preflop, Postflop, Tilt / mood, Other) and a date, newest first.
+  - **Dictating notes:** tap **Dictate** (in browsers with speech recognition, such as Chrome and Safari) or use your phone keyboard's microphone. Leave the type on *Auto-detect* and the app picks it from the words.
+  - **Update the profile from a note:** after you add a note, the app reads it for things that belong on the profile and lists them with tick boxes, e.g. *loose and aggressive* → style switches, *three bets light* → tendency, *snap bets when bluffing, tanks with the nuts* → timing, *looks back at her cards when the flush comes in* → rechecks, *never bluffs* → honest / bluffs low, *calling station* → type. It handles *not* / *never* ("not aggressive" → passive), only lists changes, and shows what each one replaces. Nothing changes until you tap **Update profile**. Use **update profile** on any older note to read it again. Everything is read in the browser; notes are never sent anywhere.
   - **Tells tally:** tells confirmed at showdown.
 - **Edit profile:**
   - **Type:** choose one, or let it follow the style switches (LAG, TAG, Nit, Calling station, Maniac).

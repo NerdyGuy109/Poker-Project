@@ -291,7 +291,234 @@
     return [...byId.values()];
   }
 
-  const api = { STYLES, TENDENCIES, TENDENCY_NAMES, TYPES, NOTE_CATEGORIES, SPEEDS, timingReads, playerType, typeBadge, resolvedType, adjustments, newPlayer, normalize, migrateOld, filterPlayers, sortPlayers, mergePlayers, sortedLog };
+  // ---------------------------------------------------------------------------
+  // Reading a note (typed or dictated) for things that belong on the profile
+  // ---------------------------------------------------------------------------
+
+  // Lower-case and smooth over the ways dictation writes poker words ("3-bet", "three bet", "see bet").
+  function cleanNote(text) {
+    return ' ' + String(text || '').toLowerCase()
+      .replace(/[’`]/g, "'")
+      .replace(/\b(he|she|they|it)'s\b/g, '$1 is')
+      .replace(/[-–—/]/g, ' ')
+      .replace(/\bthree\s*bet/g, '3bet').replace(/\b3\s+bet/g, '3bet')
+      .replace(/\bfour\s*bet/g, '4bet').replace(/\b4\s+bet/g, '4bet')
+      .replace(/\b(c|see|sea)\s*bet/g, 'cbet').replace(/\bcontinuation\s+bet/g, 'cbet')
+      .replace(/\bslow\s+play/g, 'slowplay').replace(/\bcheck\s+rais/g, 'checkrais').replace(/\bover\s+(bet|pair)/g, 'over$1')
+      .replace(/\btell\s+box/g, 'tellbox').replace(/\ball\s+in/g, 'allin')
+      .replace(/\s+/g, ' ') + ' ';
+  }
+
+  const PRON = '(?:his|her|their|the)';
+  const NEG = /\b(?:not|isn't|is not|aren't|never|no|doesn't|does not|don't|didn't|wasn't|hardly|rarely|won't|can't)\s+(?:\w+\s+){0,2}$/;
+
+  // [pattern, suggestion, negation]. negation: 'flip' = the opposite side of a style, 'skip' = ignore when negated,
+  // anything else = always applies (the pattern already handles the wording).
+  const style = (key, value) => ({ kind: 'style', key, value });
+  const tend = (key) => ({ kind: 'tendency', key, value: true });
+  const NOTE_RULES = [
+    [/\bloose\b|plays (?:a lot of|too many|so many|almost every|every|any) (?:hands|hand)|plays any two/, style('looseTight', 'loose'), 'flip'],
+    [/\btight\b|\bnitty\b|only plays (?:premiums|good hands|big hands)|plays (?:very )?few hands/, style('looseTight', 'tight'), 'flip'],
+    [/\baggressive\b|\baggro\b|bets and raises a lot|raises a lot|always betting|fires? (?:every|all three) streets?|\bbarrels\b/, style('aggPass', 'aggressive'), 'flip'],
+    [/\bpassive\b|never raises|(?:only|just) calls|check calls (?:a lot|everything)/, style('aggPass', 'passive'), 'flip'],
+    [/\bsmart\b|\bgood player\b|\bstrong player\b|\bthinking player\b|\btough player\b|knows what (?:he|she|they) (?:is|are) doing|\bpro\b/, style('skill', 'smart'), 'flip'],
+    [/\bdumb\b|\bbad player\b|\bweak player\b|\bclueless\b|\bterrible\b|no idea what|doesn't know what|\bbeginner\b|new to (?:the game|poker)/, style('skill', 'dumb'), 'flip'],
+    [/\bstoic\b|poker face|hard to read|unreadable|no tells|doesn't give (?:anything|much) away/, style('readable', 'stoic'), 'flip'],
+    [/\btellbox\b|easy to read|obvious tells?|gives (?:a lot |it |everything )?away|lots of tells/, style('readable', 'tellbox'), 'flip'],
+    [/\bbluffy\b|bluffs (?:a lot|too much|too often|often|constantly|all the time|every)|loves to bluff|big bluffer|bluffs? like crazy/, style('honesty', 'bluffy'), 'skip'],
+    [/\bhonest\b|never bluffs?|doesn't bluff|don't bluff|rarely bluffs?|always has it|straightforward|bet means (?:a hand|strength|strong)/, style('honesty', 'honest'), 'keep'],
+    [/bluffs (?:a lot|too much|too often|often|constantly|all the time)|loves to bluff|big bluffer|bluffs? like crazy/, { kind: 'bluffs', value: 'high' }, 'skip'],
+    [/bluffs (?:sometimes|occasionally|some)|occasionally bluffs|sometimes bluffs|some bluffs/, { kind: 'bluffs', value: 'medium' }, 'skip'],
+    [/never bluffs?|doesn't bluff|rarely bluffs?|hardly (?:ever )?bluffs?/, { kind: 'bluffs', value: 'low' }, 'keep'],
+
+    [/\blimp(?:s|ed|ing)?\b/, tend('limps'), 'skip'],
+    [/opens? (?:too )?(?:wide|light|a lot|everything|any two)|raises? (?:every|any) hand preflop/, tend('opens-wide'), 'skip'],
+    [/3bets? (?:light|a lot|wide|often|everything|any two)|\bsqueez/, tend('three-bets-light'), 'skip'],
+    [/folds? (?:to|vs|versus|against) (?:a )?3bets?|folds? (?:a lot |too much )?to 3bets/, tend('folds-to-3bet'), 'skip'],
+    [/\bstraddl/, tend('gambles-preflop'), 'skip'],
+    [/raise[sd]? (?:the )?(?:flop )?(?:with )?(?:a |the |his |her |their )?(?:nut )?flush draw|flush draws? .{0,20}\braise/, tend('raises-flush-draws'), 'skip'],
+    [/overplays? .{0,15}(?:overpairs?|aces|kings|big pairs?|one pair)|can't fold (?:an )?(?:overpairs?|aces|kings)|stacks? off with (?:an )?(?:overpairs?|one pair)/, tend('overplays-overpairs'), 'skip'],
+    [/calling station|calls? (?:too much|everything|anything|down light|with anything|any bet)|never folds|hard to bluff|can't be bluffed/, tend('calling-station'), 'skip'],
+    [/\bchas(?:e|es|ed|ing)\b/, tend('chases-draws'), 'skip'],
+    [/cbets? (?:every|always|100|a lot|everything|any)|always cbets?/, tend('cbets-always'), 'skip'],
+    [/gives? up (?:on )?(?:the )?turn|check folds? (?:the )?turn/, tend('gives-up-turn'), 'skip'],
+    [/\bcheckrais/, tend('check-raises'), 'skip'],
+    [/\bslowplay|\btrap(?:s|ped|ping)?\b/, tend('slowplays'), 'skip'],
+    [/bets? big (?:only )?(?:with|when) (?:strong|the nuts|a big hand|a monster|value)|big bets? (?:means?|is|are|equals?) (?:strong|value|the nuts|a big hand)|only bets? big with/, tend('big-bet-strong'), 'skip'],
+    [/overbet.{0,25}bluff|bluff.{0,25}overbet/, tend('overbet-bluffs'), 'skip'],
+    [/bluff.{0,30}(?:missed|busted|bricked)|(?:missed|busted|bricked) (?:flush |straight )?draws?.{0,25}bluff/, tend('river-bluffs'), 'skip'],
+    [/(?:won't|doesn't|never|can't|will not) fold top pair/, tend('wont-fold-top-pair'), 'keep'],
+    [/\btilt|\bsteaming\b|\bsteams\b/, tend('tilts'), 'skip'],
+    [/\bscared\b|scared money|protects? (?:his|her|their) stack|afraid to (?:lose|go broke)/, tend('scared-money'), 'skip'],
+    [/shows? (?:his |her |their )?bluffs?|showed (?:a |the |his |her |their )?bluff/, tend('shows-bluffs'), 'skip'],
+    [/talks? (?:a lot )?(?:during|in) (?:the )?hands?|\bchatty\b|\btalkative\b|talks a lot/, tend('talks-in-hands'), 'skip'],
+    [/\bdrink(?:s|ing)\b|\bdrunk\b|\bbeers?\b|\bwine\b|\bwhiskey\b|\bshots\b/, tend('drinking'), 'skip'],
+    [/buys? in short|short buy ?in|min buy/, tend('buys-in-short'), 'skip'],
+    [/\bbull(?:y|ies|ying)\b|pushes people around/, tend('big-stack-bully'), 'skip'],
+    [/tight (?:on|near|around|at) the bubble|nits? up (?:on|near) the bubble/, tend('bubble-tight'), 'skip'],
+    [/shoves? (?:wide|light|any two|everything|a lot)|jams? (?:wide|light|any two)/, tend('shoves-wide'), 'skip'],
+    [/calls? (?:shoves|allins?|jams) (?:light|wide|too light|too wide)/, tend('calls-shoves-light'), 'skip'],
+
+    [/\bmaniac\b/, { kind: 'type', value: 'maniac' }, 'skip'],
+    [/\blag\b|loose aggressive/, { kind: 'type', value: 'lag' }, 'skip'],
+    [/\btag\b|tight aggressive/, { kind: 'type', value: 'tag' }, 'skip'],
+    [/\bnit\b|\brock\b/, { kind: 'type', value: 'nit' }, 'skip'],
+    [/calling station/, { kind: 'type', value: 'station' }, 'skip'],
+    [/weak tight/, { kind: 'type', value: 'weak-tight' }, 'skip'],
+    [/\bfish\b|\bfishy\b|recreational|\brec player\b/, { kind: 'type', value: 'fish' }, 'skip'],
+    [/\breg\b|\bgrinder\b/, { kind: 'type', value: 'reg' }, 'skip'],
+
+    [/\btournaments?\b|\bmtts?\b|\bsit and go/, { kind: 'format', key: 'tournament', value: true }, 'skip'],
+    [/\bcash games?\b/, { kind: 'format', key: 'cash', value: true }, 'skip'],
+    [/\bomaha\b|\bplo\b/, { kind: 'game', key: 'omaha', value: true }, 'skip'],
+    [/hold ?'?em|\bnlh/, { kind: 'game', key: 'nlhe', value: true }, 'skip'],
+    [/mixed games?|\bhorse\b|dealer's choice|8 game/, { kind: 'game', key: 'mixed', value: true }, 'skip'],
+  ];
+
+  // Timing words.
+  const SPEED_WORDS = [
+    ['snap', /\bsnap(?:s|ped|ping)?\b|\binstant(?:ly)?\b|right away|immediately|in a flash/],
+    ['tank', /\btank(?:s|ed|ing)?\b|a long time|forever|\bages\b/],
+    ['slow', /\bslow(?:ly|er)?\b|takes? (?:his|her|their) time|takes? a (?:while|second|moment)|\bhesitat|\bpauses?\b/],
+    ['quick', /\bquick(?:ly|er)?\b|\bfast(?:er)?\b/],
+    ['normal', /normal (?:speed|pace|timing)|same speed/],
+    ['varies', /\bvaries\b|all over the place/],
+  ];
+  const SITUATION_WORDS = [
+    ['bluff', /\bbluff(?:s|ed|ing)?\b|\bair\b|with nothing|missed|busted|bricked/],
+    ['draw', /\bdraw(?:s|ing)?\b|chasing|on a draw/],
+    ['strong', /\bstrong\b|\bnuts\b|big hands?|\bmonster\b|\bvalue\b|has it|good hand|\ba set\b|\bstrength\b/],
+  ];
+  const LOOK = /\b(?:look(?:s|ed|ing)?|glanc(?:e|es|ed|ing)|peek(?:s|ed|ing)?) (?:back )?(?:down )?at (?:his|her|their|the) (?:hole )?(?:cards|hand)|\bre ?(?:check|look)(?:s|ed|ing)? (?:at )?(?:his|her|their|the)? ?(?:hole )?(?:cards|hand)?|\bcheck(?:s|ed|ing)? (?:back )?(?:his|her|their) (?:hole )?(?:cards|hand)/;
+  const LOOK_MADE = /\b(?:hits?|made|makes|got there|gets there|came in|comes in|completed|completes|fill(?:s|ed)|binks?)\b/;
+  const LOOK_MISS = /\bmiss(?:es|ed)?\b|\bbrick(?:s|ed)?\b|didn't (?:hit|come|get there)|\bblanks?\b/;
+
+  // Which kind of note it is, for the note's category.
+  function guessCategory(text) {
+    const t = cleanNote(text);
+    const has = (re) => re.test(t);
+    if (SPEED_WORDS.some(([, re]) => re.test(t)) || LOOK.test(t)) return 'timing';
+    if (has(/\btilt|steam|angry|upset|\bmad\b|frustrat|\bego\b/)) return 'tilt';
+    if (has(/\bshak|trembl|\bstar(?:e|es|ed|ing)\b|looks? away|breath|swallow|covers? (?:his|her|their) mouth|\bchips?\b.{0,20}(?:grab|reach|stack|fiddl)|(?:grab|reach)\w* for (?:his|her|their)? ?chips|\bsigh|smil|\bfidget|\bhands? (?:were|are|is|was) |\bvoice\b/)) return 'tell';
+    if (has(/\bshow(?:ed|s|n)? (?:down|a|the|his|her|their)|\bturned over|\btabled\b|\bmucked\b|at showdown/)) return 'showdown';
+    if (has(/\bpot\b|\bsiz(?:e|es|ing)\b|\boverbet|\bmin ?bet|\bhalf pot|\$\s?\d|\d+ ?(?:bb|big blinds?|dollars|bucks)\b/)) return 'sizing';
+    if (has(/preflop|pre flop|\bopen(?:s|ed)?\b|\b3bet|\b4bet|\blimp|straddl|\bbutton\b|\bblinds?\b/)) return 'preflop';
+    if (has(/\bflop|\bturn\b|\briver|\bcbet|\bbarrel|\bcheckrais|\bboard\b/)) return 'postflop';
+    return 'other';
+  }
+
+  // Splits a note into clauses so "fast when bluffing but slow when strong" reads as two facts.
+  const clausesOf = (t) => t.split(/[.;!?\n]+|,\s*(?:but|and|while)?\s*|\s(?:but|whereas|although|though)\s|\sand\s(?=(?:\w+\s){0,3}(?:when|with|if)\b)/).map((s) => ' ' + s.trim() + ' ').filter((s) => s.trim());
+
+  // Profile changes a note points to: [{ kind, key, value, label, from }]. Doesn't change anything.
+  function parseNote(text) {
+    const t = cleanNote(text);
+    const out = [];
+    const seen = new Set();
+    const push = (s, from) => {
+      const id = s.kind + ':' + (s.key || '');
+      if (seen.has(id)) return;
+      seen.add(id);
+      out.push(Object.assign({}, s, { label: suggestionLabel(s), from: from.trim() }));
+    };
+    for (const clause of clausesOf(t)) {
+      for (const [re, sug, neg] of NOTE_RULES) {
+        const m = re.exec(clause);
+        if (!m) continue;
+        const negated = NEG.test(clause.slice(0, m.index));
+        if (negated && neg === 'skip') continue;
+        if (negated && neg === 'flip') {
+          const st = STYLES.find((x) => x.id === sug.key);
+          push(style(sug.key, sug.value === st.left[0] ? st.right[0] : st.left[0]), clause);
+        } else push(sug, clause);
+      }
+      // Timing: one speed and one situation in the same clause.
+      const speeds = SPEED_WORDS.filter(([, re]) => re.test(clause)).map(([k]) => k);
+      let sits = SITUATION_WORDS.filter(([, re]) => re.test(clause)).map(([k]) => k);
+      if (sits.includes('bluff') && sits.includes('draw') && /missed|busted|bricked/.test(clause)) sits = sits.filter((k) => k !== 'draw');
+      if (speeds.length && sits.length === 1 && !LOOK.test(clause)) push({ kind: 'timing', key: sits[0], value: speeds[0] }, clause);
+      // Looking back at their cards after hitting or missing.
+      const look = LOOK.exec(clause);
+      if (look) {
+        const val = NEG.test(clause.slice(0, look.index)) ? 'no' : 'yes';
+        const after = clause.slice(look.index);
+        const miss = LOOK_MISS.test(clause);
+        const made = LOOK_MADE.test(after) || (LOOK_MADE.test(clause) && !miss);
+        if (miss) push({ kind: 'timing', key: 'lookMiss', value: val }, clause);
+        else if (made) push({ kind: 'timing', key: 'lookMade', value: val }, clause);
+      }
+      // Seat: "sit to his left".
+      const seat = /\bsit (?:on|to) (?:his|her|their) (left|right)\b/.exec(clause);
+      if (seat) push({ kind: 'field', key: 'seat', value: 'To their ' + seat[1] }, clause);
+    }
+    // A note's write-up section (live tells, bet sizing, ...).
+    const cat = guessCategory(text);
+    const section = { tell: 'tells', sizing: 'sizing', preflop: 'preflop', postflop: 'postflop', tilt: 'tilt', timing: 'timing' }[cat];
+    if (section) push({ kind: 'section', key: section, value: String(text).trim(), optional: true }, '');
+    return out;
+  }
+
+  function suggestionLabel(s) {
+    if (s.kind === 'style') {
+      const st = STYLES.find((x) => x.id === s.key);
+      return st.left[1] + ' / ' + st.right[1] + ': ' + (st.left[0] === s.value ? st.left : st.right)[1];
+    }
+    if (s.kind === 'tendency') return 'Tendency: ' + TENDENCY_NAMES[s.key];
+    if (s.kind === 'bluffs') return 'Bluffs: ' + BLUFFS.find((b) => b[0] === s.value)[1];
+    if (s.kind === 'type') return 'Type: ' + TYPE_BY_ID[s.value].label;
+    if (s.kind === 'format') return 'Plays: ' + FORMATS.find((f) => f[0] === s.key)[1];
+    if (s.kind === 'game') return 'Plays: ' + GAMES.find((g) => g[0] === s.key)[1];
+    if (s.kind === 'timing' && SPEED_LABEL[s.value]) return 'Timing, ' + TIMING_SPEEDS.find((x) => x[0] === s.key)[1].toLowerCase() + ': ' + SPEED_LABEL[s.value];
+    if (s.kind === 'timing') return TIMING_LOOKS.find((x) => x[0] === s.key)[1] + ': ' + (s.value === 'yes' ? 'Yes' : 'No');
+    if (s.kind === 'field') return s.key[0].toUpperCase() + s.key.slice(1) + ': ' + s.value;
+    if (s.kind === 'section') return 'Add this note to the ' + ((SECTIONS.find((x) => x[0] === s.key) || [0, 'Timing'])[1]) + ' write-up';
+    return '';
+  }
+
+  // What the profile has now for a suggestion ('' when nothing).
+  function currentValue(p, s) {
+    if (s.kind === 'style') return p.style[s.key] || '';
+    if (s.kind === 'tendency') return !!p.tendencies[s.key];
+    if (s.kind === 'bluffs') return p.bluffs || '';
+    if (s.kind === 'type') return p.type && p.type !== 'auto' ? p.type : '';
+    if (s.kind === 'format') return !!p.formats[s.key];
+    if (s.kind === 'game') return !!p.games[s.key];
+    if (s.kind === 'timing') return p.timing[s.key] || '';
+    if (s.kind === 'field') return p[s.key] || '';
+    if (s.kind === 'section') return (p.sections[s.key] || '').includes(s.value) ? s.value : '';
+    return '';
+  }
+
+  // The note's suggestions that would change this player, with what each one replaces.
+  function noteSuggestions(p, text) {
+    return parseNote(text).filter((s) => currentValue(p, s) !== s.value).map((s) => {
+      const was = currentValue(p, s);
+      let wasLabel = '';
+      if (s.kind === 'style' && was) { const st = STYLES.find((x) => x.id === s.key); wasLabel = (st.left[0] === was ? st.left : st.right)[1]; }
+      else if (s.kind === 'bluffs' && was) wasLabel = BLUFFS.find((b) => b[0] === was)[1];
+      else if (s.kind === 'type' && was) wasLabel = TYPE_BY_ID[was] ? TYPE_BY_ID[was].label : '';
+      else if (s.kind === 'timing' && was) wasLabel = SPEED_LABEL[was] || (was === 'yes' ? 'Yes' : 'No');
+      else if (s.kind === 'field' && was) wasLabel = was;
+      return Object.assign(s, { was: wasLabel });
+    });
+  }
+
+  function applySuggestions(p, list) {
+    for (const s of list) {
+      if (s.kind === 'style') p.style[s.key] = s.value;
+      else if (s.kind === 'tendency') p.tendencies[s.key] = true;
+      else if (s.kind === 'bluffs') p.bluffs = s.value;
+      else if (s.kind === 'type') p.type = s.value;
+      else if (s.kind === 'format') p.formats[s.key] = true;
+      else if (s.kind === 'game') p.games[s.key] = true;
+      else if (s.kind === 'timing') p.timing[s.key] = s.value;
+      else if (s.kind === 'field') p[s.key] = s.value;
+      else if (s.kind === 'section') p.sections[s.key] = p.sections[s.key] ? p.sections[s.key].replace(/\s+$/, '') + '\n' + s.value : s.value;
+    }
+    return p;
+  }
+
+  const api = { STYLES, TENDENCIES, TENDENCY_NAMES, TYPES, NOTE_CATEGORIES, SPEEDS, timingReads, parseNote, noteSuggestions, applySuggestions, guessCategory, playerType, typeBadge, resolvedType, adjustments, newPlayer, normalize, migrateOld, filterPlayers, sortPlayers, mergePlayers, sortedLog };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ---------------------------------------------------------------------------
@@ -304,7 +531,9 @@
     mode: 'view', // 'view' (profile page) or 'edit'
     filter: { text: '', format: '', game: '' },
     sort: 'updated',
-    noteCategory: 'tell',
+    noteCategory: 'auto',
+    pending: null, // profile changes offered after a note: { id, items }
+    listening: null, // the speech recognizer while dictating
   };
   let el = null;
 
@@ -412,15 +641,66 @@
 
       '<h3 class="pb-h">Notes (' + p.log.length + ')</h3>' +
       '<form class="pb-addnote" id="pb-addnote">' +
-        '<select id="pb-note-cat" aria-label="Note type">' + NOTE_CATEGORIES.map(([k, n]) => '<option value="' + k + '"' + (k === state.noteCategory ? ' selected' : '') + '>' + n + '</option>').join('') + '</select>' +
+        '<select id="pb-note-cat" aria-label="Note type"><option value="auto">Auto-detect type</option>' + NOTE_CATEGORIES.map(([k, n]) => '<option value="' + k + '"' + (k === state.noteCategory ? ' selected' : '') + '>' + n + '</option>').join('') + '</select>' +
         '<input type="date" id="pb-note-date" value="' + today() + '" aria-label="Date">' +
-        '<textarea id="pb-note-text" rows="2" placeholder="What did you see? e.g. Bet 1/3 pot river with a busted draw"></textarea>' +
+        '<textarea id="pb-note-text" rows="3" placeholder="What did you see? Type or dictate, e.g. Snap bets when bluffing, tanks with the nuts. Raised the flop with a flush draw."></textarea>' +
+        (speechAPI() ? '<button type="button" class="pb-mic' + (state.listening ? ' on' : '') + '" data-act="mic">' + (state.listening ? 'Stop dictating' : '&#127908; Dictate') + '</button>' : '') +
         '<button type="submit" class="primary">Add note</button>' +
+        '<p class="hint pb-mic-hint" id="pb-mic-msg">' + (speechAPI() ? 'Dictate here, or use the microphone on your phone&rsquo;s keyboard.' : 'Tip: use the microphone on your phone&rsquo;s keyboard to dictate.') +
+          ' After you add a note, you can update the profile from what it says.</p>' +
       '</form>' +
+      pendingHTML(p) +
       (log.length ? '<ul class="pb-notes">' + log.map((e) => '<li><div class="pb-note-meta"><span class="pb-note-date">' + esc(e.date) + '</span><span class="pb-note-cat cat-' + e.category + '">' + NOTE_LABEL[e.category] + '</span>' +
-        '<button type="button" class="link pb-note-del" data-del-log="' + e.id + '" aria-label="Delete this note">delete</button></div><p>' + esc(e.text) + '</p></li>').join('') + '</ul>' : '') +
+        '<button type="button" class="link pb-note-scan" data-scan-log="' + e.id + '">update profile</button><button type="button" class="link pb-note-del" data-del-log="' + e.id + '" aria-label="Delete this note">delete</button></div><p>' + esc(e.text) + '</p></li>').join('') + '</ul>' : '') +
 
       (tellsData.length ? '<details class="pl-tells"' + (Object.keys(p.tells).length ? ' open' : '') + '><summary>Tells confirmed at showdown</summary>' + tellsTable(p, tellsData) + '</details>' : '');
+  }
+
+  // Profile changes read from the last note, to tick and apply.
+  function pendingHTML(p) {
+    const pend = state.pending;
+    if (!pend || pend.id !== p.id) return '';
+    if (!pend.items.length) return '<div class="pb-update"><p class="hint">Nothing in that note changes the profile.</p><div class="pb-update-btns"><button type="button" class="ghost" data-act="skip-update">OK</button></div></div>';
+    return '<div class="pb-update" role="region" aria-label="Update profile from note"><h4>Update the profile from this note?</h4>' +
+      '<ul>' + pend.items.map((s, i) => '<li><label><input type="checkbox" data-upd="' + i + '"' + (s.optional ? '' : ' checked') + '> <span>' + esc(s.label) +
+        (s.was ? ' <span class="pb-was">(was ' + esc(s.was) + ')</span>' : '') + '</span></label>' +
+        (s.from && pend.items.length > 1 ? '<span class="pb-from">&ldquo;' + esc(s.from) + '&rdquo;</span>' : '') + '</li>').join('') + '</ul>' +
+      '<div class="pb-update-btns"><button type="button" class="primary" data-act="apply-update">Update profile</button><button type="button" class="ghost" data-act="skip-update">Skip</button></div></div>';
+  }
+
+  const speechAPI = () => (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) || null;
+
+  // Dictation with the browser's speech recognition; text goes into the note box.
+  function toggleDictation() {
+    if (state.listening) { state.listening.stop(); return; }
+    const SR = speechAPI();
+    const box = el.querySelector('#pb-note-text');
+    const btn = el.querySelector('.pb-mic');
+    const msg = el.querySelector('#pb-mic-msg');
+    if (!SR || !box) return;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = navigator.language || 'en-US';
+    const base = box.value.replace(/\s+$/, '');
+    rec.onresult = (ev) => {
+      let heard = '';
+      for (let i = 0; i < ev.results.length; i++) heard += ev.results[i][0].transcript;
+      box.value = (base ? base + ' ' : '') + heard.trim();
+    };
+    rec.onerror = (ev) => {
+      if (msg) msg.textContent = ev.error === 'not-allowed' || ev.error === 'service-not-allowed'
+        ? 'Microphone blocked. Allow it in your browser settings, or use the microphone on your keyboard.'
+        : 'Dictation stopped (' + ev.error + '). You can also use the microphone on your keyboard.';
+    };
+    rec.onend = () => {
+      state.listening = null;
+      const b = el.querySelector('.pb-mic');
+      if (b) { b.classList.remove('on'); b.innerHTML = '&#127908; Dictate'; }
+    };
+    try { rec.start(); } catch (e) { return; }
+    state.listening = rec;
+    if (btn) { btn.classList.add('on'); btn.textContent = 'Stop dictating'; }
   }
 
   // Timing on the profile: speeds, rechecks, what they give away, and timing notes.
@@ -528,6 +808,8 @@
   }
 
   function select(id, mode) {
+    if (state.listening) state.listening.stop();
+    if (id !== state.selected) state.pending = null;
     state.selected = id;
     state.mode = mode || 'view';
     renderList();
@@ -645,8 +927,11 @@
       const p = current();
       const text = el.querySelector('#pb-note-text').value.trim();
       if (!p || !text) { el.querySelector('#pb-note-text').focus(); return; }
+      if (state.listening) state.listening.stop();
       state.noteCategory = el.querySelector('#pb-note-cat').value;
-      p.log.push({ id: 'n' + Date.now().toString(36), date: el.querySelector('#pb-note-date').value || today(), category: state.noteCategory, text });
+      const category = state.noteCategory === 'auto' ? guessCategory(text) : state.noteCategory;
+      p.log.push({ id: 'n' + Date.now().toString(36), date: el.querySelector('#pb-note-date').value || today(), category, text });
+      state.pending = { id: p.id, items: noteSuggestions(p, text) };
       touch(p);
       renderEditor();
       renderList();
@@ -666,6 +951,13 @@
         const c = p.tells[t.dataset.tell] || (p.tells[t.dataset.tell] = { strong: 0, weak: 0 });
         c[t.dataset.way]++;
         touch(p); renderEditor();
+      } else if (t.dataset.scanLog) {
+        const note = p.log.find((x) => x.id === t.dataset.scanLog);
+        if (!note) return;
+        state.pending = { id: p.id, items: noteSuggestions(p, note.text) };
+        renderEditor();
+        const box = el.querySelector('.pb-update');
+        if (box) box.scrollIntoView({ block: 'center' });
       } else if (t.dataset.delLog) {
         if (!confirm('Delete this note?')) return;
         p.log = p.log.filter((x) => x.id !== t.dataset.delLog);
@@ -680,6 +972,13 @@
         if (act === 'back') select(null);
         else if (act === 'prev' && pos > 0) select(list[pos - 1].id, state.mode);
         else if (act === 'next' && pos >= 0 && pos < list.length - 1) select(list[pos + 1].id, state.mode);
+        else if (act === 'mic') toggleDictation();
+        else if (act === 'apply-update' && state.pending) {
+          const picked = [...el.querySelectorAll('[data-upd]')].filter((c) => c.checked).map((c) => state.pending.items[+c.dataset.upd]);
+          state.pending = null;
+          if (picked.length) { applySuggestions(p, picked); touch(p); }
+          renderEditor(); renderList();
+        } else if (act === 'skip-update') { state.pending = null; renderEditor(); }
         else if (act === 'edit') { state.mode = 'edit'; renderEditor(); }
         else if (act === 'done') { state.mode = 'view'; renderEditor(); el.querySelector('#pl-editor').scrollIntoView({ block: 'start' }); }
         else if (act === 'add-leak') {

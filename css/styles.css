@@ -803,3 +803,23 @@ body.busy { cursor: progress; }
 .pb-reads p { margin: 0 0 4px; }
 .pb-reads p:last-child { margin: 0; }
 .pb-note-cat.cat-timing { color: #0d9488; }
+
+/* Dictation and updating the profile from a note */
+.pb-addnote .pb-mic { grid-column: auto; background: var(--panel); border: 1px solid var(--panel-border); }
+.pb-addnote .pb-mic + button[type="submit"] { grid-column: auto; }
+.pb-addnote .pb-mic.on { background: #c0353c; border-color: #c0353c; color: #fff; animation: pb-pulse 1.2s ease-in-out infinite; }
+@keyframes pb-pulse { 50% { opacity: 0.75; } }
+.pb-mic-hint { grid-column: 1 / -1; margin: 0; }
+.pb-update { margin-top: 10px; border: 2px solid var(--accent); border-radius: 10px; padding: 12px 14px; background: var(--panel); }
+.pb-update h4 { margin: 0 0 8px; font-size: 1rem; }
+.pb-update ul { list-style: none; margin: 0 0 10px; padding: 0; }
+.pb-update li { padding: 6px 0; border-bottom: 1px solid var(--panel-border); }
+.pb-update li:last-child { border-bottom: 0; }
+.pb-update label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; line-height: 1.35; }
+.pb-update input { margin-top: 3px; flex: none; }
+.pb-was { color: var(--muted); font-size: 0.88rem; }
+.pb-from { display: block; margin: 2px 0 0 24px; color: var(--muted); font-size: 0.82rem; font-style: italic; overflow-wrap: anywhere; }
+.pb-update-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.pb-update-btns button { padding: 8px 14px; font-weight: 650; }
+.pb-note-scan { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
+.pb-note-scan + .pb-note-del { margin-left: 0; }

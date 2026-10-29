@@ -614,3 +614,43 @@ test('player notes: timing reads', () => {
   p.timing = { bluff: 'tank' };
   assert.equal(PL.filterPlayers([p], { text: 'long tank' }).length, 1);
 });
+
+test('player notes: reading a note to update the profile', () => {
+  const PL = require('../js/players.js');
+  const labels = (text) => PL.parseNote(text).map((s) => s.label);
+  const a = labels("He's loose and aggressive, bluffs a lot. Snap bets when he's bluffing but tanks with the nuts.");
+  for (const want of ['Loose / Tight: Loose', 'Aggressive / Passive: Aggressive', 'Bluffy / Honest: Bluffy', 'Bluffs: High',
+    'Timing, bluffing: Snap / instant', 'Timing, acting strong: Long tank']) assert.ok(a.includes(want), want);
+  // Negation flips a style and stops a tendency.
+  const b = labels('Not very aggressive, never bluffs. Calling station. Doesn\'t limp.');
+  assert.ok(b.includes('Aggressive / Passive: Passive'));
+  assert.ok(b.includes('Bluffy / Honest: Honest') && b.includes('Bluffs: Low') && b.includes('Type: Calling station'));
+  assert.ok(!b.some((l) => /Limps/.test(l)));
+  // Dictation spellings.
+  assert.ok(labels('three bets light from the button').includes('Tendency: 3-bets light / squeezes'));
+  assert.ok(labels('see bets every flop').includes('Tendency: C-bets almost every flop'));
+  assert.ok(labels('raised the flop with a flush draw').includes('Tendency: Raises flops with flush draws'));
+  // Looking back at their cards.
+  assert.ok(labels('She looks back at her cards when the flush comes in').includes('Looks back at their cards when they make their hand: Yes'));
+  assert.ok(labels('Rechecked his hand after the river bricked').includes('Looks back at their cards when they miss their draw: Yes'));
+  assert.ok(labels("doesn't look back at his cards when he misses").includes('Looks back at their cards when they miss their draw: No'));
+  assert.ok(labels('takes his time when drawing and bets quickly with strong hands').includes('Timing, drawing: Slow'));
+  // Note types.
+  assert.equal(PL.guessCategory('Hands shaking when he shoved'), 'tell');
+  assert.equal(PL.guessCategory('Bet 1/3 pot with a busted draw'), 'sizing');
+  assert.equal(PL.guessCategory('Snap called'), 'timing');
+  assert.equal(PL.guessCategory('Nice guy'), 'other');
+  // Only changes are offered, and applying them updates the profile.
+  const p = PL.newPlayer('Dee');
+  p.style.looseTight = 'tight';
+  p.tendencies.limps = true;
+  const sugg = PL.noteSuggestions(p, 'Loose, limps a lot, tanks when strong. Plays tournaments.');
+  assert.equal(sugg.find((s) => s.kind === 'style').was, 'Tight');
+  assert.ok(!sugg.some((s) => s.kind === 'tendency'));
+  PL.applySuggestions(p, sugg);
+  assert.equal(p.style.looseTight, 'loose');
+  assert.equal(p.timing.strong, 'tank');
+  assert.equal(p.formats.tournament, true);
+  assert.equal(p.sections.timing, 'Loose, limps a lot, tanks when strong. Plays tournaments.');
+  assert.deepEqual(PL.noteSuggestions(p, 'Loose, limps a lot, tanks when strong. Plays tournaments.'), []);
+});
