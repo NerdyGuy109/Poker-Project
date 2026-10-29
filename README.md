@@ -124,8 +124,9 @@ The **Players** tab is a player book for the people you play with.
   - **Key facts:** Stack (buy-ins), Seat (where to sit), Bluffs (low / medium / high), what they play, where, looks and where they're from.
   - **Leaks and how to exploit them:** cards you write, with optional suggestions generated from their style switches and tendencies.
   - **Write-ups:** Live tells, Bet sizing, Preflop, Postflop, Tilt / mood and General notes.
+  - **Timing:** how fast they act when strong, when bluffing and when drawing (snap, quick, normal, slow, long tank or varies), whether they look back at their cards after making a hand or missing a draw, a box spelling out what their speed gives away, and timing notes.
   - **Default plan for their type.**
-  - **Notes:** quick notes with a category (Live tell, Showdown, Bet sizing, Preflop, Postflop, Tilt / mood, Other) and a date, newest first.
+  - **Notes:** quick notes with a category (Live tell, Timing, Showdown, Bet sizing, Preflop, Postflop, Tilt / mood, Other) and a date, newest first.
   - **Tells tally:** tells confirmed at showdown.
 - **Edit profile:**
   - **Type:** choose one, or let it follow the style switches (LAG, TAG, Nit, Calling station, Maniac).
@@ -133,6 +134,7 @@ The **Players** tab is a player book for the people you play with.
   - **Leak / exploit pairs.**
   - **Style switches:** loose/tight, aggressive/passive, smart/dumb, stoic/tellbox, bluffy/honest.
   - **Tendency checkboxes.**
+  - **Timing:** speed when strong / bluffing / drawing, and whether they recheck their cards.
   - **Write-ups.**
 
   New players open straight into Edit.

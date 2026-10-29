@@ -596,3 +596,21 @@ test('player notes: types, advice, search, merge and migration', () => {
   assert.equal(migrated[0].tells.freeze.weak, 3);
   assert.deepEqual(migrated[0].style, {});
 });
+
+test('player notes: timing reads', () => {
+  const PL = require('../js/players.js');
+  const p = PL.newPlayer('Timer');
+  assert.deepEqual(PL.timingReads(p), []);
+  p.timing = { strong: 'snap', bluff: 'tank', draw: 'quick' };
+  assert.match(PL.timingReads(p)[0], /snap \/ instant = strong, long tank = bluffing, quick = drawing/);
+  p.timing = { strong: 'normal', bluff: 'normal' }; // same speed: nothing to read
+  assert.deepEqual(PL.timingReads(p), []);
+  p.timing = { lookMade: 'yes', lookMiss: 'no' };
+  assert.match(PL.timingReads(p)[0], /just made their hand/);
+  const n = PL.normalize({ name: 'Old', notes: '' });
+  assert.deepEqual(n.timing, {}); // older saves get the timing fields
+  assert.ok(PL.NOTE_CATEGORIES.some(([k]) => k === 'timing'));
+  // Timing shows up in search.
+  p.timing = { bluff: 'tank' };
+  assert.equal(PL.filterPlayers([p], { text: 'long tank' }).length, 1);
+});

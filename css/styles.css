@@ -795,3 +795,11 @@ body.busy { cursor: progress; }
 @media (max-width: 560px) { .panel .pl-editor h2.pb-name { font-size: 1.9rem; } }
 .pl-editor .mn-field select { width: 100%; max-width: 420px; }
 .pl-priority button[data-priority="0"].on { background: var(--panel); color: var(--muted); }
+.pl-timing { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; margin-bottom: 10px; }
+.pl-timing .hint { font-weight: 400; margin: 2px 0 0; font-size: 0.75rem; }
+.pb-timing { margin-bottom: 8px; }
+.pb-timing .pb-fact-v { font-family: inherit; font-weight: 650; }
+.pb-reads { border-left: 4px solid var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 0 8px 8px 0; padding: 8px 12px; margin-bottom: 8px; }
+.pb-reads p { margin: 0 0 4px; }
+.pb-reads p:last-child { margin: 0; }
+.pb-note-cat.cat-timing { color: #0d9488; }

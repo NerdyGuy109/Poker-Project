@@ -118,7 +118,7 @@
 
   const NOTE_CATEGORIES = [
     ['tell', 'Live tell'], ['showdown', 'Showdown'], ['sizing', 'Bet sizing'], ['preflop', 'Preflop'],
-    ['postflop', 'Postflop'], ['tilt', 'Tilt / mood'], ['other', 'Other'],
+    ['postflop', 'Postflop'], ['timing', 'Timing'], ['tilt', 'Tilt / mood'], ['other', 'Other'],
   ];
   const NOTE_LABEL = Object.fromEntries(NOTE_CATEGORIES);
 
@@ -133,6 +133,35 @@
   ];
 
   const BLUFFS = [['', 'Not sure'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High']];
+
+  // Timing: how fast they act in each situation, and whether they look back at their cards.
+  const SPEEDS = [['', 'Not sure'], ['snap', 'Snap / instant'], ['quick', 'Quick'], ['normal', 'Normal pace'], ['slow', 'Slow'], ['tank', 'Long tank'], ['varies', 'Varies']];
+  const SPEED_LABEL = Object.fromEntries(SPEEDS);
+  const SPEED_ORDER = { snap: 0, quick: 1, normal: 2, slow: 3, tank: 4 };
+  const TIMING_SPEEDS = [
+    ['strong', 'Acting strong', 'When they have a big hand'],
+    ['bluff', 'Bluffing', 'When they bet or raise with nothing'],
+    ['draw', 'Drawing', 'When they call or bet with a draw'],
+  ];
+  const YES_NO = [['', 'Not sure'], ['yes', 'Yes'], ['no', 'No']];
+  const TIMING_LOOKS = [
+    ['lookMade', 'Looks back at their cards when they make their hand'],
+    ['lookMiss', 'Looks back at their cards when they miss their draw'],
+  ];
+
+  // What their speed gives away, when the situations differ (e.g. snap when strong, tank when bluffing).
+  function timingReads(p) {
+    const t = p.timing || {};
+    const out = [];
+    const ranked = TIMING_SPEEDS.map(([k, label]) => [k, label, t[k]]).filter(([, , v]) => v in SPEED_ORDER);
+    if (ranked.length >= 2 && new Set(ranked.map((r) => r[2])).size > 1) {
+      out.push('Their speed gives it away: ' + ranked.map(([, label, v]) => SPEED_LABEL[v].toLowerCase() + ' = ' + label.toLowerCase().replace('acting ', '')).join(', ') + '.');
+    }
+    if (t.lookMade === 'yes' && t.lookMiss !== 'yes') out.push('Looking back at their cards after a scare card suggests they just made their hand.');
+    if (t.lookMiss === 'yes' && t.lookMade !== 'yes') out.push('Looking back at their cards after the river suggests a missed draw.');
+    if (t.lookMade === 'yes' && t.lookMiss === 'yes') out.push('They look back at their cards whether they hit or miss, so a recheck alone tells you little.');
+    return out;
+  }
 
   // The type from the style switches, when the player has no type chosen.
   function autoTypeId(p) {
@@ -196,6 +225,7 @@
       notes: '',
       log: [],
       tells: {},
+      timing: {},
       created: now,
       updated: now,
     };
@@ -204,7 +234,7 @@
   // Fills in any missing fields (older saves, imports).
   function normalize(p) {
     const out = Object.assign(newPlayer(p.name), p);
-    for (const k of ['formats', 'games', 'style', 'tendencies', 'tells', 'sections']) out[k] = Object.assign({}, p[k] || {});
+    for (const k of ['formats', 'games', 'style', 'tendencies', 'tells', 'sections', 'timing']) out[k] = Object.assign({}, p[k] || {});
     out.leaks = Array.isArray(p.leaks) ? p.leaks.filter((l) => l && (l.leak || l.exploit)).map((l, i) => ({ id: l.id || 'l' + i, leak: l.leak || '', exploit: l.exploit || '' })) : [];
     // Notes: every entry gets a category and a YYYY-MM-DD date (older entries stored a full timestamp).
     out.log = Array.isArray(p.log) ? p.log.filter((e) => e && e.text).map((e, i) => ({
@@ -237,7 +267,7 @@
       if (filter.game && !p.games[filter.game]) return false;
       if (!q) return true;
       const hay = [p.name, p.summary, p.description, p.appearance, p.origin, p.venue, p.stakes, p.stack, p.seat, playerType(p)]
-        .concat(Object.values(p.sections), p.leaks.map((l) => l.leak + ' ' + l.exploit), p.log.map((e) => e.text)).join(' ').toLowerCase();
+        .concat(Object.values(p.sections), Object.values(p.timing || {}).map((v) => SPEED_LABEL[v] || ''), p.leaks.map((l) => l.leak + ' ' + l.exploit), p.log.map((e) => e.text)).join(' ').toLowerCase();
       return hay.includes(q);
     });
   }
@@ -261,7 +291,7 @@
     return [...byId.values()];
   }
 
-  const api = { STYLES, TENDENCIES, TENDENCY_NAMES, TYPES, NOTE_CATEGORIES, playerType, typeBadge, resolvedType, adjustments, newPlayer, normalize, migrateOld, filterPlayers, sortPlayers, mergePlayers, sortedLog };
+  const api = { STYLES, TENDENCIES, TENDENCY_NAMES, TYPES, NOTE_CATEGORIES, SPEEDS, timingReads, playerType, typeBadge, resolvedType, adjustments, newPlayer, normalize, migrateOld, filterPlayers, sortPlayers, mergePlayers, sortedLog };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
 
   // ---------------------------------------------------------------------------
@@ -376,6 +406,7 @@
         '<ul>' + suggestions.map((t) => '<li>' + t + '</li>').join('') + '</ul></details>' : '') +
 
       SECTIONS.filter(([k]) => p.sections[k]).map(([k, title]) => '<h3 class="pb-h">' + title + '</h3><div class="pb-text">' + esc(p.sections[k]) + '</div>').join('') +
+      timingHTML(p) +
 
       (type ? '<h3 class="pb-h">Default plan for a ' + esc(type.label.split(' (')[0].toLowerCase()) + '</h3><div class="pb-plan">' + type.plan + '</div>' : '') +
 
@@ -390,6 +421,19 @@
         '<button type="button" class="link pb-note-del" data-del-log="' + e.id + '" aria-label="Delete this note">delete</button></div><p>' + esc(e.text) + '</p></li>').join('') + '</ul>' : '') +
 
       (tellsData.length ? '<details class="pl-tells"' + (Object.keys(p.tells).length ? ' open' : '') + '><summary>Tells confirmed at showdown</summary>' + tellsTable(p, tellsData) + '</details>' : '');
+  }
+
+  // Timing on the profile: speeds, rechecks, what they give away, and timing notes.
+  function timingHTML(p) {
+    const t = p.timing;
+    const cells = TIMING_SPEEDS.filter(([k]) => t[k]).map(([k, label]) => [label, SPEED_LABEL[t[k]]])
+      .concat(TIMING_LOOKS.filter(([k]) => t[k]).map(([k, label]) => [label.replace('Looks back at their cards when they ', 'Rechecks cards: '), t[k] === 'yes' ? 'Yes' : 'No']));
+    const reads = timingReads(p);
+    if (!cells.length && !p.sections.timing) return '';
+    return '<h3 class="pb-h">Timing</h3>' +
+      (cells.length ? '<div class="pb-facts pb-timing">' + cells.map(([k, v]) => '<div><span class="pb-fact-k">' + k + '</span><span class="pb-fact-v">' + v + '</span></div>').join('') + '</div>' : '') +
+      (reads.length ? '<div class="pb-reads">' + reads.map((r) => '<p>' + r + '</p>').join('') + '</div>' : '') +
+      (p.sections.timing ? '<div class="pb-text">' + esc(p.sections.timing) + '</div>' : '');
   }
 
   function tellsTable(p, tellsData) {
@@ -437,6 +481,17 @@
       '<h3 class="tell-section">Key facts</h3>' +
       '<div class="pl-row">' + area('stack', 'Stack', 'Buy-ins and rebuys, e.g. Buys in for $1,000, rebuys for $1-2k', 2) + area('seat', 'Seat', 'Where to sit relative to them, and why', 2) + '</div>' +
       '<label class="mn-field">Bluffs<select data-field="bluffs">' + BLUFFS.map(([k, n]) => '<option value="' + k + '"' + (p.bluffs === k ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
+
+      '<h3 class="tell-section">Timing</h3>' +
+      '<p class="hint">How long they take to act, and what they do with their cards. Changes in speed are often the most reliable tell.</p>' +
+      '<div class="pl-timing">' +
+        TIMING_SPEEDS.map(([k, label, hint]) => '<label class="mn-field">' + label + '<select data-timing="' + k + '">' +
+          SPEEDS.map(([v, n]) => '<option value="' + v + '"' + ((p.timing[k] || '') === v ? ' selected' : '') + '>' + n + '</option>').join('') +
+          '</select><span class="hint">' + hint + '</span></label>').join('') +
+        TIMING_LOOKS.map(([k, label]) => '<label class="mn-field">' + label + '<select data-timing="' + k + '">' +
+          YES_NO.map(([v, n]) => '<option value="' + v + '"' + ((p.timing[k] || '') === v ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>').join('') +
+      '</div>' +
+      '<label class="mn-field pl-area">Timing notes<textarea data-section="timing" rows="3" placeholder="e.g. Snap-calls with draws, tanks then shoves with air, looks back at his cards when the flush comes in">' + esc(p.sections.timing || '') + '</textarea></label>' +
 
       '<h3 class="tell-section">Leaks and how to exploit them</h3>' +
       '<div class="pl-leaks">' + p.leaks.map((l) => '<div class="pl-leak-edit">' +
@@ -577,6 +632,7 @@
       const t = e.target;
       if (!p) return;
       if (t.id === 'pb-note-cat') { state.noteCategory = t.value; return; }
+      if (t.dataset.timing) { if (t.value) p.timing[t.dataset.timing] = t.value; else delete p.timing[t.dataset.timing]; touch(p); renderList(); return; }
       if (t.tagName === 'SELECT' && t.dataset.field) { p[t.dataset.field] = t.value; touch(p); renderList(); renderEditor(); }
       else if (t.dataset.plFormat) { p.formats[t.dataset.plFormat] = t.checked; touch(p); renderList(); renderEditor(); }
       else if (t.dataset.plGame) { p.games[t.dataset.plGame] = t.checked; touch(p); renderList(); }
