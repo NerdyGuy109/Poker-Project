@@ -171,11 +171,34 @@
     return { total, hands, pct, draws, scores, categoriesOf, cardsOf: (i) => Array.from(hands.subarray(i * 4, i * 4 + 4)), live, boards };
   }
 
+  // A starting-hand pattern such as AAxx, KKxx, AKxx or JT9x: the ranks the hand must hold (x = any card).
+  // Returns { label, need: counts per rank index } or null for "all hands"; throws on a bad pattern.
+  function parseHandPattern(text) {
+    const t = String(text || '').trim().toUpperCase().replace(/10/g, 'T').replace(/[\s-]/g, '');
+    if (!t || t === 'ANY' || t === 'ALL' || /^X*$/.test(t)) return null;
+    if (!/^[2-9TJQKAX]{1,4}$/.test(t)) throw new Error('Use up to four ranks and x, e.g. AAxx, KKxx, AKxx or JT9x.');
+    const need = new Array(13).fill(0);
+    for (const ch of t) if (ch !== 'X') need[P.RANKS.indexOf(ch)]++;
+    if (need.some((n) => n > 4)) throw new Error('There are only four cards of each rank.');
+    const ranks = t.replace(/X/g, '').split('').sort((a, b) => P.RANKS.indexOf(b) - P.RANKS.indexOf(a)).join('');
+    return { label: ranks + 'x'.repeat(4 - ranks.length), need };
+  }
+
+  // Whether four cards fit a parsed pattern (at least those ranks; AAxx includes AAAx and AAKx).
+  function matchesPattern(cards, pattern) {
+    if (!pattern) return true;
+    const have = new Array(13).fill(0);
+    for (const c of cards) have[P.rankOf(c)]++;
+    return pattern.need.every((n, r) => have[r] >= n);
+  }
+
   // The strongest hands on both boards: by made hand (the weaker board decides) and by draws.
   // Hands that play the same on both boards (same best hand and the same real draws; backdoor
   // flush draws ignored) are grouped: each group is { index (a representative hand), combos }.
-  function rankHands(an, count) {
-    const idx = Array.from({ length: an.total }, (_, i) => i);
+  // `pattern` (from parseHandPattern) limits the list to hands like AAxx; matching is how many there are.
+  function rankHands(an, count, pattern) {
+    let idx = Array.from({ length: an.total }, (_, i) => i);
+    if (pattern) idx = idx.filter((i) => matchesPattern(an.cardsOf(i), pattern));
     const madeKey = (i) => Math.min(an.pct[0][i], an.pct[1][i]);
     const groupTop = (order) => {
       const groups = [];
@@ -196,7 +219,7 @@
     const anyDraws = idx.some((i) => an.draws[0][i] || an.draws[1][i]);
     const draws = anyDraws ? groupTop(idx.slice().sort((a, b) => drawKey(b) - drawKey(a) ||
       (an.draws[0][b] + an.draws[1][b]) - (an.draws[0][a] + an.draws[1][a]) || madeKey(b) - madeKey(a))) : [];
-    return { made, draws };
+    return { made, draws, matching: idx.length };
   }
 
   // Simulated equity of each candidate hand against `opponents` random hands, finishing both boards.
@@ -304,7 +327,7 @@
     };
   }
 
-  const api = { dealBoards, checkBoards, analyzeBoards, rankHands, createSimulation, comboIndex };
+  const api = { dealBoards, checkBoards, analyzeBoards, rankHands, parseHandPattern, matchesPattern, createSimulation, comboIndex };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.BombPot = api;
 })(typeof self !== 'undefined' ? self : this);

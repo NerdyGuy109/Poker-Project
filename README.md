@@ -59,6 +59,7 @@ Picking **DB Bomb** opens a **Bomb pot** view for double-board bomb pots: everyo
 - **Strongest hands on both boards:**
   - **Rating:** every possible four-card hand (163,185 on the flop) is rated on each board by its current hand and draws (nut flush draws, wraps…).
   - **Candidates:** the strongest made hands and the best draws on *both* boards are picked, with the weaker board counting most. Hands that play the same (suit swaps, irrelevant side cards) are grouped with a combo count.
+  - **Starting hands:** limit the list to one kind of hand, for players who only play those: **AAxx**, **KKxx**, **AKxx** or **QQxx**, or type your own (e.g. `JT9x`, `AKQx`). AAxx means at least two aces (AAKx and AAAx count); AKxx means at least an ace and a king. The list then shows the best hands of that kind, and how many of all possible hands are that kind.
   - **Simulation:** each candidate is simulated against your chosen number of opponents (1–9), running out both boards. Results show equity (average share of the pot, each board worth half), scoop % and per-board win rates.
 - **Your hand:** type four cards to see what they make on each board, what share of hands they beat, and their equity, scoop and per-board win rates against the field.
 - **Strategy notes:** scoop or bust, nutty hands in multiway pots, low SPR, blockers on two boards, and hands that play both boards.

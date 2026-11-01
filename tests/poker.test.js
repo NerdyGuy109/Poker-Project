@@ -654,3 +654,39 @@ test('player notes: reading a note to update the profile', () => {
   assert.equal(p.sections.timing, 'Loose, limps a lot, tanks when strong. Plays tournaments.');
   assert.deepEqual(PL.noteSuggestions(p, 'Loose, limps a lot, tanks when strong. Plays tournaments.'), []);
 });
+
+test('bomb pot: best hands of one kind (AAxx, KKxx, AKxx)', () => {
+  const B = require('../js/bombpot.js');
+  assert.equal(B.parseHandPattern(''), null);
+  assert.equal(B.parseHandPattern('aaxx').label, 'AAxx');
+  assert.equal(B.parseHandPattern('KA').label, 'AKxx');
+  assert.equal(B.parseHandPattern('10 9 J x').label, 'JT9x');
+  assert.throws(() => B.parseHandPattern('AAAAA'));
+  assert.throws(() => B.parseHandPattern('ZZxx'));
+  const cards = (t) => P.parseCardList(t);
+  const aa = B.parseHandPattern('AAxx');
+  assert.ok(B.matchesPattern(cards('As Ad 7c 2h'), aa));
+  assert.ok(B.matchesPattern(cards('As Ad Ac Kh'), aa));
+  assert.ok(!B.matchesPattern(cards('As Kd 7c 2h'), aa));
+  assert.ok(B.matchesPattern(cards('As Kd 7c 2h'), B.parseHandPattern('AKxx')));
+
+  const b1 = cards('Kh 9h 4c');
+  const b2 = cards('Js Ts 2d');
+  const an = B.analyzeBoards(b1, b2);
+  const all = B.rankHands(an, 8);
+  assert.equal(all.matching, an.total);
+  for (const pat of ['AAxx', 'KKxx', 'AKxx']) {
+    const p = B.parseHandPattern(pat);
+    const r = B.rankHands(an, 8, p);
+    assert.ok(r.made.length > 0 && r.matching > 0 && r.matching < an.total, pat);
+    for (const g of r.made.concat(r.draws)) assert.ok(B.matchesPattern(an.cardsOf(g.index), p), pat);
+  }
+  // KKxx with one king on the board: the count matches a direct count of hands with 2+ kings.
+  let kk = 0;
+  for (let i = 0; i < an.total; i++) if (an.cardsOf(i).filter((c) => P.rankOf(c) === P.RANKS.indexOf('K')).length >= 2) kk++;
+  assert.equal(B.rankHands(an, 8, B.parseHandPattern('KKxx')).matching, kk);
+  // No hand can hold three aces when the boards show two.
+  const none = B.rankHands(B.analyzeBoards(cards('As Ad 4c'), cards('7s 8s 2d')), 8, B.parseHandPattern('AAAx'));
+  assert.equal(none.matching, 0);
+  assert.deepEqual(none.made, []);
+});

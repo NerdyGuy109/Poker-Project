@@ -17,6 +17,8 @@
     candidates: [], // [{ index, combos, source }]
     sim: null,
     heroText: '',
+    pattern: '', // starting hands to list: '' (all), 'AAxx', 'KKxx', 'AKxx' or the player's own
+    matching: 0,
     token: 0,
   };
   let root = null;
@@ -24,6 +26,7 @@
   const pct = (x) => (100 * x).toFixed(1) + '%';
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   const TRIALS = 2000;
+  const PRESETS = ['AAxx', 'KKxx', 'AKxx', 'QQxx'];
 
   function cardHTML(c, small) {
     const suit = P.SUITS[P.suitOf(c)];
@@ -78,20 +81,29 @@
     setTimeout(() => {
       if (token !== state.token) return;
       state.analysis = B.analyzeBoards(state.b1, state.b2);
-      const r = B.rankHands(state.analysis, 8);
-      const seen = new Set();
-      state.candidates = [];
-      for (const [list, source] of [[r.made, 'Made hand'], [r.draws, 'Draws']]) {
-        for (const g of list) {
-          if (seen.has(g.index)) continue;
-          seen.add(g.index);
-          state.candidates.push({ index: g.index, combos: g.combos, source });
-        }
-      }
-      renderBest();
-      runSim(token);
-      renderHero();
+      rankAndSimulate(token);
     }, 30);
+  }
+
+  // The best hands (of the chosen kind) from the current analysis, then their equity.
+  function rankAndSimulate(token) {
+    let pattern = null;
+    try { pattern = B.parseHandPattern(state.pattern); } catch (e) { pattern = null; }
+    const r = B.rankHands(state.analysis, 8, pattern);
+    state.matching = r.matching;
+    const seen = new Set();
+    state.candidates = [];
+    for (const [list, source] of [[r.made, 'Made hand'], [r.draws, 'Draws']]) {
+      for (const g of list) {
+        if (seen.has(g.index)) continue;
+        seen.add(g.index);
+        state.candidates.push({ index: g.index, combos: g.combos, source });
+      }
+    }
+    state.sim = null;
+    renderBest();
+    if (state.candidates.length) runSim(token); else root.querySelector('#bp-progress').hidden = true;
+    renderHero();
   }
 
   function runSim(token) {
@@ -117,7 +129,16 @@
     let rows = state.candidates.map((c, i) => ({ ...c, sim: state.sim ? state.sim[i] : null }));
     if (state.sim) rows.sort((a, b) => b.sim.equity - a.sim.equity);
     const river = state.b1.length === 5;
+    let pattern = null;
+    try { pattern = B.parseHandPattern(state.pattern); } catch (e) { /* shown by the filter */ }
+    const kind = pattern ? pattern.label : '';
+    if (pattern && !rows.length) {
+      out.innerHTML = '<p class="bp-none">No ' + kind + ' hands are possible: the boards use too many of those cards.</p>';
+      return;
+    }
     out.innerHTML =
+      (pattern ? '<p class="bp-kind">Best <strong>' + kind + '</strong> hands &middot; ' + state.matching.toLocaleString() + ' of ' + an.total.toLocaleString() +
+        ' possible hands (' + pct(state.matching / an.total) + ') are ' + kind + '</p>' : '') +
       '<div class="mn-table-wrap"><table class="mn-table bp-table"><thead><tr><th>Hand</th><th>Board 1</th><th>Board 2</th>' +
       '<th class="num">Equity</th><th class="num">Scoop</th><th class="num">Wins B1</th><th class="num">Wins B2</th></tr></thead><tbody>' +
       rows.map((r) => {
@@ -130,8 +151,8 @@
           '<td class="num"><strong>' + (s ? pct(s.equity) : '<span class="muted">&hellip;</span>') + '</strong></td>' +
           simCell(s && s.scoop) + simCell(s && s.win1) + simCell(s && s.win2) + '</tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="hint">Candidates are the strongest made hands' + (river ? '' : ' and the best draws') + ' on <em>both</em> boards (the weaker board counts most), out of all ' +
-      an.total.toLocaleString() + ' possible hands. Equity is the average share of the pot against ' + state.opponents + ' random opponent' + (state.opponents === 1 ? '' : 's') +
+      '<p class="hint">Candidates are the strongest ' + (kind ? kind + ' ' : '') + 'made hands' + (river ? '' : ' and the best draws') + ' on <em>both</em> boards (the weaker board counts most), out of ' +
+      (kind ? 'the ' + state.matching.toLocaleString() + ' ' + kind + ' hands' : 'all ' + an.total.toLocaleString() + ' possible hands') + '. Equity is the average share of the pot against ' + state.opponents + ' random opponent' + (state.opponents === 1 ? '' : 's') +
       (river ? '' : ', running out both boards') + ', with each board worth half; ' + TRIALS.toLocaleString() + ' simulated deals per hand (about &plusmn;2%). ' +
       'Scoop means winning both boards outright.</p>';
   }
@@ -220,6 +241,13 @@
       '<div class="bp-opts"><label class="mn-field">Opponents<select id="bp-opp">' +
         [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => '<option value="' + n + '"' + (n === state.opponents ? ' selected' : '') + '>' + n + '</option>').join('') +
       '</select></label><button type="button" id="bp-rerun">Re-run simulation</button></div>' +
+      '<div class="bp-filter"><span class="bp-filter-label">Starting hands</span><div class="seg" role="group" aria-label="Starting hands">' +
+        ['', ...PRESETS].map((k) => '<button type="button" data-bp-pattern="' + k + '"' + ((state.pattern || '') === k ? ' class="on"' : '') + '>' + (k || 'All hands') + '</button>').join('') +
+        '</div><form class="bp-pattern" id="bp-pattern-form"><input id="bp-pattern" type="text" maxlength="6" value="' + esc(PRESETS.includes(state.pattern) ? '' : state.pattern) +
+        '" placeholder="Other, e.g. JT9x" autocomplete="off" spellcheck="false" autocapitalize="characters" aria-label="Other starting hands"><button type="submit">Show</button></form></div>' +
+      '<p class="hint bp-filter-hint">For players who only play certain hands: AAxx means at least two aces (AAKx counts), AKxx at least an ace and a king. ' +
+        'You can type your own, like JT9x or AKQx.</p>' +
+      '<p class="board-error" id="bp-pattern-error" role="alert"></p>' +
       '<div class="equity-progress" id="bp-progress" hidden><span></span></div>' +
       '<div id="bp-best"></div>' +
 
@@ -271,6 +299,18 @@
       state.opponents = +e.target.value;
       if (state.analysis) { state.sim = null; renderBest(); runSim(++state.token); renderHero(); }
     });
+    const setPattern = (text) => {
+      const perr = root.querySelector('#bp-pattern-error');
+      perr.textContent = '';
+      let pat;
+      try { pat = B.parseHandPattern(text); } catch (ex) { perr.textContent = ex.message; return; }
+      state.pattern = pat ? pat.label : '';
+      root.querySelectorAll('[data-bp-pattern]').forEach((b) => b.classList.toggle('on', b.dataset.bpPattern === state.pattern));
+      root.querySelector('#bp-pattern').value = PRESETS.includes(state.pattern) ? '' : state.pattern;
+      if (state.analysis) rankAndSimulate(++state.token);
+    };
+    root.querySelectorAll('[data-bp-pattern]').forEach((b) => b.addEventListener('click', () => setPattern(b.dataset.bpPattern)));
+    root.querySelector('#bp-pattern-form').addEventListener('submit', (e) => { e.preventDefault(); setPattern(root.querySelector('#bp-pattern').value); });
     root.querySelector('#bp-rerun').addEventListener('click', () => {
       if (state.analysis) { state.sim = null; renderBest(); runSim(++state.token); }
     });

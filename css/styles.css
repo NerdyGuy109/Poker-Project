@@ -823,3 +823,15 @@ body.busy { cursor: progress; }
 .pb-update-btns button { padding: 8px 14px; font-weight: 650; }
 .pb-note-scan { margin-left: auto; font-size: 0.8rem; color: var(--muted); }
 .pb-note-scan + .pb-note-del { margin-left: 0; }
+
+/* Bomb pot: limit the best-hands list to AAxx, KKxx, ... */
+.bp-filter { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 4px 0 4px; }
+.bp-filter-label { font-weight: 650; font-size: 0.9rem; }
+.bp-filter .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.bp-filter .seg button { border: 1px solid var(--panel-border); border-radius: 999px; padding: 6px 14px; background: var(--panel); font-weight: 600; }
+.bp-filter .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bp-pattern { display: flex; gap: 6px; }
+.bp-pattern input { width: 9.5em; font: inherit; padding: 6px 8px; border: 1px solid var(--panel-border); border-radius: 8px; background: var(--panel); color: var(--text); }
+.bp-filter-hint { margin: 2px 0 8px; }
+.bp-kind { margin: 4px 0 8px; }
+.bp-none { padding: 12px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
