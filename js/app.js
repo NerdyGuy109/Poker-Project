@@ -70,7 +70,7 @@
       };
     }
     if (P.GAMES[saved.game]) state.game = saved.game;
-    if (['equity', 'runouts', 'tells', 'math', 'draw', 'players'].includes(saved.view)) state.view = saved.view;
+    if (['equity', 'runouts', 'tells', 'math', 'draw', 'players', 'buyins'].includes(saved.view)) state.view = saved.view;
     state.priorityGroup = ['made', 'draw', 'low'].includes(saved.priorityGroup) ? saved.priorityGroup
       : saved.drawsFirst ? 'draw' : 'made';
     const t = saved.texture || {};
@@ -620,16 +620,19 @@
     const tells = state.view === 'tells';
     const math = state.view === 'math';
     const players = state.view === 'players';
-    const general = tells || math || players;
+    const buyins = state.view === 'buyins';
+    const general = tells || math || players || buyins;
     $('tells-panel').hidden = !tells;
     $('math-panel').hidden = !math;
     $('players-panel').hidden = !players;
+    $('buyins-panel').hidden = !buyins;
     $('board-panel').hidden = general || draw;
     $('game-note').hidden = general;
     $('game-tabs').hidden = general;
     if (tells && !$('tells-panel').hasChildNodes()) window.Tells.render($('tells-panel'));
     if (math && !$('math-panel').hasChildNodes()) window.PokerMath.render($('math-panel'));
     if (players) window.Players.render($('players-panel'));
+    if (buyins) window.BuyIns.render($('buyins-panel'));
     $('grid-panel').hidden = isOmaha();
     $('omaha-panel').hidden = !isOmaha();
     const lowOpt = $('color-priority').querySelector('option[value="low"]');

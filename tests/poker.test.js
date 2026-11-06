@@ -716,3 +716,58 @@ test('poker math: Kelly bankrolls', () => {
   assert.equal(M.kellyBankroll(0.2, 5, 0.5).bankroll, 250);
   assert.equal(M.kellyBankroll(-1, 90, 0.5), null);
 });
+
+test('tournament receipts: reading OCR text into log fields', () => {
+  const R = require('../js/receipt.js');
+  // Text as Tesseract read it from a photographed receipt.
+  const a = R.parseReceipt(`BELLAGIO POKER ROOM
+3600 Las Vegas Blvd S
+
+Las Vegas, NV 89109
+TOURNAMENT ENTRY
+
+Event #12
+
+$600 No-Limit Hold'em Deepstack
+Date: 11/06/2026 12:03 PM
+Buy-In: $500.00
+Entry Fee: $60.00
+staff Approp.: $40.00
+TOTAL: $600.00
+Paid: CASH
+
+Table: 42 Seat: 7
+Starting Chips: 30,000
+Entry: Re-entry 1
+
+Receipt #: 0012-88412
+player: ADAM WOLFE`);
+  assert.equal(a.venue, 'BELLAGIO POKER ROOM');
+  assert.equal(a.location, 'Las Vegas, NV 89109');
+  assert.equal(a.event, "Event #12 · $600 No-Limit Hold'em Deepstack");
+  assert.equal(a.game, 'nlhe');
+  assert.equal(a.date, '2026-11-06T12:03');
+  assert.deepEqual([a.buyIn, a.fee, a.total], [500, 100, 600]);
+  assert.deepEqual([a.table, a.seat, a.stack, a.receiptNo], ['42', '7', '30,000', '0012-88412']);
+  assert.equal(a.entryType, 'reentry');
+  assert.equal(a.payment, 'Cash');
+  assert.equal(a.player, 'ADAM WOLFE');
+  // Unlabelled dollar signs, short labels, ISO dates.
+  const b = R.parseReceipt('Hard Rock Hotel & Casino\nPoker Room\nHollywood, FL\nWINTER POKER OPEN\nEV 7 - $400 PLO Bounty\n2026-11-05 18:45\nPrize Pool 340.00\nBounty 100.00\nAdmin Fee 60.00\nAmount 500.00\nTBL 18 SEAT 3\nTrans ID 7731904');
+  assert.equal(b.venue, 'Hard Rock Hotel & Casino');
+  assert.equal(b.game, 'omaha');
+  assert.equal(b.date, '2026-11-05T18:45');
+  assert.deepEqual([b.buyIn, b.fee, b.total, b.table, b.seat, b.receiptNo], [440, 60, 500, '18', '3', '7731904']);
+  // Month names, thousands separators, OCR slips (S for $, O for 0), and a total worked out from its parts.
+  const c = R.parseReceipt('WYNN LAS VEGAS\nNov 6, 2026 7:15 pm\nWYNN FALL CLASSIC EV 4\n$1,100 NLH MYSTERY BOUNTY\nBuy In S1,OOO.00\nFee 100.00\nTbl 12 St 4');
+  assert.equal(c.date, '2026-11-06T19:15');
+  assert.equal(c.event, 'WYNN FALL CLASSIC EV 4 · $1,100 NLH MYSTERY BOUNTY');
+  assert.deepEqual([c.buyIn, c.fee, c.total, c.table, c.seat], [1000, 100, 1100, '12', '4']);
+  // Only the event price; day-first dates.
+  const d = R.parseReceipt('Lucky Chances\n06-NOV-26 21:05\n$150 Daily NLH\nRe-buy');
+  assert.equal(d.total, 150);
+  assert.equal(d.date, '2026-11-06T21:05');
+  assert.equal(d.entryType, 'reentry');
+  assert.equal(R.dateOf('25/12/2026'), '2026-12-25');
+  assert.equal(R.parseReceipt('').total, null);
+});
