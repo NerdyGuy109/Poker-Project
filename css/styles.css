@@ -835,3 +835,7 @@ body.busy { cursor: progress; }
 .bp-filter-hint { margin: 2px 0 8px; }
 .bp-kind { margin: 4px 0 8px; }
 .bp-none { padding: 12px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+/* Kelly bankroll calculators */
+.mn-calc .mn-wide { flex-basis: 100%; margin: 0; }
+.mn-ok { display: inline-block; font-size: 0.78rem; font-weight: 700; color: #127a4f; background: color-mix(in srgb, #127a4f 12%, transparent); border-radius: 999px; padding: 2px 8px; }

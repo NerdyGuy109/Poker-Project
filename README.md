@@ -155,6 +155,11 @@ Switch to **Math** for notes, live calculators and charts:
 - **Stack-to-pot ratio:** SPR calculator with what each SPR range means for stacking off, plus typical SPRs for common 100bb cash-game spots.
 - **Stack size in big blinds and M:** enter stack, blinds, ante (or big-blind ante) and players to get big blinds, M, effective M, and the matching Harrington zone and big-blind strategy band.
 - **Geometric bet sizing:** the same-fraction-every-street sizing that gets stacks in by the river. Calculator gives the fraction and a street-by-street plan, with a chart and table by SPR.
+- **Bankroll (Kelly criterion):** how big a bankroll you need for the fastest long-run growth, at full, half (the default) or quarter Kelly. Kelly bankroll = standard deviation² ÷ win rate.
+  - **Cash games:** enter win rate and standard deviation (bb/100), stake, buy-in and bankroll. You get the bankroll needed in big blinds, buy-ins and dollars, the biggest big blind your bankroll supports, hands to double, the chance of ever dropping to half, and a table of which stakes you can play.
+  - **Tournaments:** the same from ROI and standard deviation per tournament (in buy-ins): bankroll in buy-ins and the biggest buy-in.
+  - **Any single bet:** Kelly stake from win chance and payout odds.
+  - **Why half Kelly:** a chart and table compare sizes. Half Kelly keeps 75% of the growth with half the swings, the chance of ever halving falls from 50% to 12.5%, and it allows for overestimating your win rate.
 
 ## Flop runout cheat sheet (PDF)
 

@@ -690,3 +690,29 @@ test('bomb pot: best hands of one kind (AAxx, KKxx, AKxx)', () => {
   assert.equal(none.matching, 0);
   assert.deepEqual(none.made, []);
 });
+
+test('poker math: Kelly bankrolls', () => {
+  const M = require('../js/mathnotes.js');
+  // Even-money bet at 55%: 10% edge, bet 10% (full Kelly).
+  const b = M.kellyBet(0.55, 1);
+  assert.ok(Math.abs(b.edge - 0.1) < 1e-12 && Math.abs(b.full - 0.1) < 1e-12);
+  assert.ok(M.kellyBet(0.4, 1).full < 0);
+  // Cash: 5 bb/100 with 90 bb/100 swings needs 8100 / 5 = 1620 bb at full Kelly, twice that at half.
+  const full = M.kellyBankroll(5, 90, 1);
+  const half = M.kellyBankroll(5, 90, 0.5);
+  assert.equal(full.fullBankroll, 1620);
+  assert.equal(half.bankroll, 3240);
+  // Half Kelly keeps 75% of the growth.
+  assert.ok(Math.abs(half.growth / full.growth - 0.75) < 1e-12);
+  // Chance of ever halving: 50% at full Kelly, 12.5% at half; risk of ruin at fixed stakes e^-2 and e^-4.
+  assert.equal(full.halveChance, 0.5);
+  assert.equal(half.halveChance, 0.125);
+  assert.ok(Math.abs(full.ruinFixed - Math.exp(-2)) < 1e-12);
+  assert.ok(Math.abs(half.ruinFixed - Math.exp(-4)) < 1e-12);
+  assert.equal(M.halveChance(2), 1);
+  // The biggest big blind a $6480 bankroll supports at half Kelly is $2.
+  assert.ok(Math.abs(M.kellyMaxStake(6480, 5, 90, 0.5) - 2) < 1e-12);
+  // Tournaments: 20% ROI, 5 buy-ins SD: 125 buy-ins at full Kelly, 250 at half.
+  assert.equal(M.kellyBankroll(0.2, 5, 0.5).bankroll, 250);
+  assert.equal(M.kellyBankroll(-1, 90, 0.5), null);
+});

@@ -1,5 +1,5 @@
 /*
- * Poker math notes: pot odds, SPR, stack depth (BB and M) and geometric bet sizing.
+ * Poker math notes: pot odds, SPR, stack depth (BB and M), geometric bet sizing and Kelly bankrolls.
  * The math functions at the top have no DOM access, so tests can load them in Node.
  */
 (function () {
@@ -60,6 +60,40 @@
     return { fraction: f, rows, finalPot: p };
   }
 
+  // Kelly criterion for one bet: win probability p, net odds b (win b for every 1 staked).
+  // Returns the edge (expected profit per 1 staked) and the full-Kelly fraction of the bankroll.
+  function kellyBet(p, b) {
+    const edge = p * b - (1 - p);
+    return { edge, full: edge / b };
+  }
+
+  // Kelly for a game you play over and over (cash hands or tournaments): `mean` and `sd` are your
+  // average result and its standard deviation per unit of play, in units of the stake (bb per 100
+  // hands, or buy-ins per tournament). `k` is the Kelly multiple (1 = full, 0.5 = half Kelly).
+  // Growth is the expected log-growth of the bankroll per unit of play.
+  function kellyBankroll(mean, sd, k) {
+    if (!(mean > 0) || !(sd > 0) || !(k > 0)) return null;
+    const v = sd * sd;
+    const growth = k * (1 - k / 2) * mean * mean / v;
+    return {
+      fullBankroll: v / mean, // stakes in the bankroll at full Kelly
+      bankroll: v / (k * mean), // at the chosen multiple
+      growth,
+      toDouble: growth > 0 ? Math.LN2 / growth : Infinity,
+      halveChance: halveChance(k),
+      ruinFixed: riskOfRuin(mean, sd, v / (k * mean)),
+    };
+  }
+
+  // Chance of ever falling to half your bankroll when you keep resizing stakes at k times Kelly.
+  const halveChance = (k) => (k >= 2 ? 1 : Math.pow(0.5, 2 / k - 1));
+
+  // Chance of losing a bankroll of `units` stakes if you never move down (no resizing).
+  const riskOfRuin = (mean, sd, units) => (mean > 0 ? Math.exp(-2 * mean * units / (sd * sd)) : 1);
+
+  // The biggest stake (big blind or buy-in) a bankroll supports at k times Kelly.
+  const kellyMaxStake = (bankroll, mean, sd, k) => (mean > 0 && sd > 0 ? k * mean * bankroll / (sd * sd) : 0);
+
   // ---------------------------------------------------------------------------
   // Reference content
   // ---------------------------------------------------------------------------
@@ -95,6 +129,16 @@
     { name: '3-bet pot out of position: BB 3-bets BTN to 11bb', pot: 11 + 11 + 0.5, stack: 89 },
     { name: '4-bet pot: 22bb 4-bet, called', pot: 22 + 22 + 1.5, stack: 78 },
   ];
+
+  const KELLY_ROWS = [
+    { k: 1, name: 'Full Kelly' },
+    { k: 0.5, name: 'Half Kelly' },
+    { k: 0.25, name: 'Quarter Kelly' },
+    { k: 2, name: 'Double Kelly (too big)' },
+  ];
+
+  // Cash stakes: [name, big blind].
+  const STAKES = [['0.25/0.50', 0.5], ['0.50/1', 1], ['1/2', 2], ['1/3', 3], ['2/5', 5], ['5/10', 10], ['10/20', 20], ['25/50', 50]];
 
   const DRAWS = {
     2: 'Pocket pair to a set',
@@ -428,12 +472,149 @@
     });
   }
 
+  function kellySection() {
+    const kSel = '<label class="mn-field">Kelly size<select id="kelly-k"><option value="1">Full Kelly</option><option value="0.5" selected>Half Kelly</option><option value="0.25">Quarter Kelly</option></select></label>';
+    return '<section class="mn-section" id="mn-kelly">' +
+      '<h3>Bankroll: the Kelly criterion</h3>' +
+      '<div class="mn-notes">' +
+        '<p>The Kelly criterion picks the bet size that makes your bankroll grow fastest over the long run. For a single bet that wins <em>b</em> for every 1 staked with probability <em>p</em>:</p>' +
+        '<p class="mn-formula">Kelly fraction = (p &times; b &minus; (1 &minus; p)) &divide; b = edge &divide; odds</p>' +
+        '<p>In poker, the bet is the stake you sit down at. Over many hands your results have a win rate (mean) and a standard deviation (swings), and Kelly works out to:</p>' +
+        '<p class="mn-formula">Kelly bankroll = standard deviation&sup2; &divide; win rate</p>' +
+        '<p>Use bb/100 for both numbers to get the answer in big blinds, or buy-ins per tournament to get it in buy-ins. Then move up or down so your bankroll always stays at that many big blinds or buy-ins. Kelly only works if you <strong>move down after losing</strong>.</p>' +
+        '<p><strong>Why half Kelly:</strong> it keeps <strong>75% of the growth</strong> with <strong>half the swings</strong>, and you drop to half your bankroll far less often (12.5% of the time instead of 50%). It also protects you if you overestimate your win rate, which is easy on small samples. If your real win rate is half what you think, half Kelly on your estimate is exactly full Kelly on the truth. Playing at twice the true Kelly size gives zero growth.</p>' +
+      '</div>' +
+
+      '<h4>Cash games</h4>' +
+      '<div class="mn-calc">' +
+        field('kelly-wr', 'Win rate (bb/100)', 5, 0.5) + field('kelly-sd', 'Standard deviation (bb/100)', 90, 5) +
+        field('kelly-bb', 'Big blind you play ($)', 2, 0.5) + field('kelly-bi', 'Buy-in (big blinds)', 100, 10) +
+        field('kelly-roll', 'Your bankroll ($)', 5000, 100) + kSel +
+        '<p class="hint mn-wide">Typical standard deviations: about 60&ndash;80 bb/100 full ring hold&rsquo;em, 80&ndash;100 six-max, 120&ndash;160 or more for PLO. Tracking software shows yours. Win rates over a few thousand hands are mostly luck, so be conservative.</p>' +
+        '<div class="mn-out" id="kelly-cash"></div>' +
+      '</div>' +
+
+      '<h4>Tournaments</h4>' +
+      '<div class="mn-calc">' +
+        field('kelly-roi', 'ROI (%)', 20, 1) + field('kelly-tsd', 'Standard deviation (buy-ins per tournament)', 5, 0.5) +
+        field('kelly-troll', 'Your bankroll ($)', 5000, 100) +
+        '<p class="hint mn-wide">Rough standard deviations: about 1.5&ndash;2 buy-ins for single-table sit &amp; gos, 4&ndash;10+ for large-field tournaments (bigger fields swing more). Uses the Kelly size chosen above.</p>' +
+        '<div class="mn-out" id="kelly-mtt"></div>' +
+      '</div>' +
+
+      '<h4>Any single bet</h4>' +
+      '<div class="mn-calc">' +
+        field('kelly-p', 'Chance to win (%)', 55, 1) + field('kelly-odds', 'Pays (to 1)', 1, 0.1) + field('kelly-broll', 'Bankroll ($)', 1000, 50) +
+        '<p class="hint mn-wide">For side bets, prop bets and the like. Even money is 1 to 1. Uses the Kelly size chosen above.</p>' +
+        '<div class="mn-out" id="kelly-bet"></div>' +
+      '</div>' +
+
+      '<div class="mn-figure"><p class="mn-figure-title">Growth vs. the chance of halving your bankroll, by bet size</p><div id="kelly-chart"></div></div>' +
+      '<div class="mn-table-wrap"><table class="mn-table"><thead><tr><th>Size</th><th>Bankroll needed</th><th>Growth</th><th>Swings</th><th>Ever drop to half</th><th>Broke at fixed stakes</th></tr></thead><tbody>' +
+        KELLY_ROWS.map((r) => '<tr' + (r.k === 0.5 ? ' class="mn-key"' : '') + '><td>' + r.name + '</td><td>' + num(1 / r.k, 2) + '&times; Kelly</td><td>' + pct(r.k * (2 - r.k), 0) + '</td><td>' +
+          pct(r.k, 0) + '</td><td>' + pct(halveChance(r.k), 1) + '</td><td>' + pct(Math.exp(-2 / r.k), r.k < 0.5 ? 2 : 1) + '</td></tr>').join('') +
+      '</tbody></table></div>' +
+      '<p class="hint">Growth and swings are compared with full Kelly. &ldquo;Ever drop to half&rdquo; assumes you keep resizing your stakes. The last column is the risk of ruin if you keep playing the same stake with that bankroll.</p>' +
+      '</section>';
+  }
+
+  const money = (x) => (Number.isFinite(x) ? '$' + (x >= 100 ? Math.round(x).toLocaleString() : num(x, 2)) : '–');
+  const count = (x) => (Number.isFinite(x) ? Math.round(x).toLocaleString() : '–');
+
+  function updateKelly() {
+    const k = +document.getElementById('kelly-k').value;
+    const kName = { 1: 'full Kelly', 0.5: 'half Kelly', 0.25: 'quarter Kelly' }[k];
+
+    // Cash games.
+    const wr = val('kelly-wr');
+    const sd = val('kelly-sd');
+    const bb = val('kelly-bb');
+    const bi = val('kelly-bi') || 100;
+    const roll = val('kelly-roll');
+    const cash = document.getElementById('kelly-cash');
+    const r = kellyBankroll(wr, sd, k);
+    if (!r) {
+      cash.innerHTML = '<p class="mn-sentence">' + (wr <= 0 ? 'With no winning edge, Kelly says not to play for profit: no bankroll is big enough.' : 'Enter a standard deviation above zero.') + '</p>';
+    } else {
+      const maxBB = kellyMaxStake(roll, wr, sd, k);
+      const have = bb > 0 ? roll / bb : 0;
+      const verdict = bb > 0 ? (have >= r.bankroll
+        ? 'Your ' + money(roll) + ' covers ' + money(bb) + ' big blinds at ' + kName + ' (' + num(have / bi, 1) + ' buy-ins).'
+        : 'Your ' + money(roll) + ' is short for ' + money(bb) + ' big blinds at ' + kName + ': you need ' + money(r.bankroll * bb) + '. Move down until it grows.') : '';
+      cash.innerHTML =
+        '<div class="mn-stat"><span>Bankroll needed</span><strong>' + count(r.bankroll) + ' bb</strong></div>' +
+        '<div class="mn-stat"><span>In buy-ins</span><strong>' + num(r.bankroll / bi, 1) + '</strong></div>' +
+        (bb > 0 ? '<div class="mn-stat"><span>At ' + money(bb) + ' big blind</span><strong>' + money(r.bankroll * bb) + '</strong></div>' : '') +
+        '<div class="mn-stat"><span>Biggest big blind for ' + money(roll) + '</span><strong>' + money(maxBB) + '</strong></div>' +
+        '<p class="mn-sentence">' + verdict + ' Full Kelly would be ' + count(r.fullBankroll) + ' bb (' + num(r.fullBankroll / bi, 1) + ' buy-ins). ' +
+          'At ' + kName + ', resizing as you go, your bankroll doubles in about <strong>' + count(r.toDouble * 100) + ' hands</strong> on average, and there is a ' +
+          pct(r.halveChance, 1) + ' chance it ever falls to half along the way.</p>' +
+        '<div class="mn-table-wrap"><table class="mn-table mn-plan"><thead><tr><th>Stakes</th><th>Bankroll at ' + kName + '</th><th></th></tr></thead><tbody>' +
+          STAKES.map(([name, b]) => {
+            const ok = roll >= r.bankroll * b;
+            return '<tr' + (Math.abs(b - bb) < 1e-9 ? ' class="mn-key"' : '') + '><td>' + name + '</td><td>' + money(r.bankroll * b) + '</td><td>' + (ok ? '<span class="mn-ok">You can play</span>' : '') + '</td></tr>';
+          }).join('') +
+        '</tbody></table></div>';
+    }
+
+    // Tournaments.
+    const roi = val('kelly-roi') / 100;
+    const tsd = val('kelly-tsd');
+    const troll = val('kelly-troll');
+    const mtt = document.getElementById('kelly-mtt');
+    const t = kellyBankroll(roi, tsd, k);
+    if (!t) {
+      mtt.innerHTML = '<p class="mn-sentence">' + (roi <= 0 ? 'With no positive ROI, no bankroll is big enough to play for profit.' : 'Enter a standard deviation above zero.') + '</p>';
+    } else {
+      mtt.innerHTML =
+        '<div class="mn-stat"><span>Bankroll needed</span><strong>' + count(t.bankroll) + ' buy-ins</strong></div>' +
+        '<div class="mn-stat"><span>Biggest buy-in for ' + money(troll) + '</span><strong>' + money(troll / t.bankroll) + '</strong></div>' +
+        '<div class="mn-stat"><span>Full Kelly</span><strong>' + count(t.fullBankroll) + ' buy-ins</strong></div>' +
+        '<p class="mn-sentence">At ' + kName + ' your bankroll doubles in about <strong>' + count(t.toDouble) + ' tournaments</strong> on average, with a ' +
+          pct(t.halveChance, 1) + ' chance of falling to half along the way. Count every re-entry as another buy-in.</p>';
+    }
+
+    // A single bet.
+    const p = val('kelly-p') / 100;
+    const odds = val('kelly-odds');
+    const broll = val('kelly-broll');
+    const bet = document.getElementById('kelly-bet');
+    if (!(odds > 0) || p <= 0 || p >= 1) {
+      bet.innerHTML = '<p class="hint">Enter a chance between 0 and 100% and odds above zero.</p>';
+    } else {
+      const kb = kellyBet(p, odds);
+      if (kb.full <= 0) {
+        bet.innerHTML = '<p class="mn-sentence">No edge: this bet loses ' + pct(-kb.edge, 1) + ' of what you stake on average, so Kelly says <strong>don&rsquo;t bet</strong>. You would need more than ' + pct(1 / (1 + odds), 1) + ' to win.</p>';
+      } else {
+        const f = kb.full * k;
+        bet.innerHTML =
+          '<div class="mn-stat"><span>Edge</span><strong>' + pct(kb.edge, 1) + '</strong></div>' +
+          '<div class="mn-stat"><span>Full Kelly</span><strong>' + pct(kb.full, 1) + '</strong></div>' +
+          '<div class="mn-stat"><span>Bet (' + kName + ')</span><strong>' + pct(Math.min(1, f), 1) + ' &middot; ' + money(Math.min(1, f) * broll) + '</strong></div>';
+      }
+    }
+
+    lineChart(document.getElementById('kelly-chart'), {
+      label: 'Bankroll growth and chance of halving by Kelly multiple',
+      x: [0, 2], y: [0, 1],
+      xTicks: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2], yTicks: [0, 0.25, 0.5, 0.75, 1],
+      xFmt: (x) => num(x, 2) + '×', yFmt: (y, fine) => pct(y, fine ? 1 : 0),
+      xTitle: 'Bet size (× Kelly)',
+      snap: (x) => Math.round(x * 20) / 20,
+      markerX: k,
+      series: [
+        { name: 'Growth (vs. full Kelly)', short: 'Growth', color: SERIES[0], fn: (x) => x * (2 - x) },
+        { name: 'Chance of ever halving', short: 'Halving', color: SERIES[1], fn: (x) => (x <= 0 ? 0 : halveChance(x)) },
+      ],
+    });
+  }
+
   function render(root) {
     root.innerHTML =
       '<div class="panel-head"><h2>Poker math</h2><span class="hint">Notes, calculators and charts. Change any number and everything updates.</span></div>' +
-      '<nav class="mn-toc"><a href="#mn-potodds">Pot odds</a><a href="#mn-spr">SPR</a><a href="#mn-stack">Stack size &amp; M</a><a href="#mn-geo">Geometric sizing</a></nav>' +
-      potOddsSection() + sprSection() + stackSection() + geoSection();
-    const updates = { po: updatePotOdds, spr: updateSpr, st: updateStack, geo: updateGeo };
+      '<nav class="mn-toc"><a href="#mn-potodds">Pot odds</a><a href="#mn-spr">SPR</a><a href="#mn-stack">Stack size &amp; M</a><a href="#mn-geo">Geometric sizing</a><a href="#mn-kelly">Bankroll (Kelly)</a></nav>' +
+      potOddsSection() + sprSection() + stackSection() + geoSection() + kellySection();
+    const updates = { po: updatePotOdds, spr: updateSpr, st: updateStack, geo: updateGeo, kelly: updateKelly };
     root.addEventListener('input', (e) => {
       const key = (e.target.id || '').split('-')[0];
       if (updates[key]) updates[key]();
@@ -453,11 +634,12 @@
         lastWidth = root.clientWidth;
         updatePotOdds();
         updateGeo();
+        updateKelly();
       }, 150);
     });
   }
 
-  const api = { potOdds, outsEquity, spr, stackDepth, geometricFraction, geometricPlan, render };
+  const api = { potOdds, outsEquity, spr, stackDepth, geometricFraction, geometricPlan, kellyBet, kellyBankroll, kellyMaxStake, halveChance, riskOfRuin, render };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else window.PokerMath = api;
 })();
