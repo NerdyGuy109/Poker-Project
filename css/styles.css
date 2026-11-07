@@ -890,3 +890,37 @@ body.busy { cursor: progress; }
   .bi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bi-grid .mn-field:has([type="datetime-local"]) { grid-column: 1 / -1; }
 }
+
+/* Results archive */
+.bi-h { margin: 14px 0 0; font-size: 1rem; }
+.bi-archived { margin: 0 0 12px; color: var(--muted); }
+.bi-result { border: 1px solid var(--panel-border); border-radius: 10px; padding: 8px 12px 4px; margin: 0 0 10px; }
+.bi-result legend { font-weight: 700; padding: 0 6px; }
+.bi-result .hint { margin: 0 0 6px; }
+.rs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.rs-chips button { border: 1px solid var(--panel-border); border-radius: 999px; padding: 6px 14px; background: var(--panel); font-weight: 600; }
+.rs-chips button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.rs-chips button.on .muted { color: inherit; opacity: 0.8; }
+.rs-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: flex-end; }
+.rs-filters .mn-field select { width: auto; max-width: 200px; }
+.rs-filters .rs-search input { width: 180px; }
+.rs-stats small { font-size: 0.75rem; font-weight: 500; color: var(--muted); }
+.rs-stats .pos { color: #127a4f; }
+.rs-stats .neg { color: #c0353c; }
+.rs-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.rs-item { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--panel-border); border-radius: 0; padding: 10px 4px; font: inherit; color: inherit; }
+.rs-nums { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; font-variant-numeric: tabular-nums; }
+.rs-profit { font-weight: 750; font-size: 1.1rem; }
+.rs-profit.pos { color: #127a4f; }
+.rs-profit.neg { color: #c0353c; }
+.rs-sub { font-size: 0.78rem; color: var(--muted); }
+.pl-badge.rs-ft { background: color-mix(in srgb, #2a78d6 15%, transparent); color: #2a78d6; }
+.pl-badge.rs-win { background: color-mix(in srgb, #c98a00 18%, transparent); color: #9a6a00; }
+.rs-chart .rs-line { fill: none; stroke: var(--series-1); stroke-width: 2.5; stroke-linejoin: round; }
+.rs-chart .rs-zero { stroke: var(--muted); stroke-dasharray: 4 4; stroke-width: 1; }
+.rs-chart .rs-dot { fill: var(--panel); stroke: #c0353c; stroke-width: 2; }
+.rs-chart .rs-dot.cash { fill: #127a4f; stroke: #127a4f; }
+@media (max-width: 600px) {
+  .rs-filters .mn-field { flex: 1 1 calc(50% - 12px); }
+  .rs-filters .mn-field select, .rs-filters .rs-search input { width: 100%; max-width: none; box-sizing: border-box; }
+}

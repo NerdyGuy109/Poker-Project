@@ -771,3 +771,48 @@ player: ADAM WOLFE`);
   assert.equal(R.dateOf('25/12/2026'), '2026-12-25');
   assert.equal(R.parseReceipt('').total, null);
 });
+
+test('tournament results: grouping, filters, sorting and totals', () => {
+  const RS = require('../js/results.js');
+  assert.deepEqual(RS.parsePlace('22nd of 640'), { place: 22, entrants: 640 });
+  assert.deepEqual(RS.parsePlace('3/112'), { place: 3, entrants: 112 });
+  assert.deepEqual(RS.parsePlace('Won'), { place: 1, entrants: '' });
+  assert.deepEqual(RS.parsePlace(''), { place: '', entrants: '' });
+  assert.equal(RS.ordinal(1) + RS.ordinal(2) + RS.ordinal(3) + RS.ordinal(11) + RS.ordinal(22), '1st2nd3rd11th22nd');
+  const e = (id, date, venue, event, total, cashed, place, entrants, game) => ({ id, date, venue, event, total, cashed, place, entrants, game: game || 'nlhe' });
+  const entries = [
+    e('a1', '2026-11-06T12:00', 'Bellagio', 'Event #12', 600, '', '', '', 'nlhe'),
+    e('a2', '2026-11-06T15:00', 'bellagio ', 'event #12', 600, 3000, 7, 640, 'nlhe'), // re-entry, made the final table
+    e('b', '2026-10-02T19:00', 'Lucky Chances', '$150 Daily', 150, '', 40, 90),
+    e('c', '2026-09-01T12:00', 'Wynn', 'Main', 1100, 9000, 1, 300, 'omaha'),
+    e('d', '2025-12-31T12:00', 'Wynn', 'Daily', 200, 350, 12, 100),
+    e('x', '2026-08-01', 'Home game', '', 50, '', '', ''), // no event name: its own tournament
+  ];
+  const all = RS.groupTournaments(entries);
+  assert.equal(all.length, 5);
+  const bell = all.find((t) => t.venue === 'Bellagio');
+  assert.deepEqual([bell.entries, bell.spent, bell.cashed, bell.profit, bell.place, bell.entrants, bell.finalTable, bell.itm, bell.won], [2, 1200, 3000, 1800, 7, 640, true, true, false]);
+  assert.equal(bell.roi, 1.5);
+  assert.equal(bell.date, '2026-11-06T12:00');
+  // Final table size changes what counts.
+  assert.equal(RS.groupTournaments(entries, 6).find((t) => t.venue === 'Bellagio').finalTable, false);
+  const ids = (list) => list.map((t) => t.firstId);
+  assert.deepEqual(ids(RS.filterTournaments(all, { result: 'itm' })).sort(), ['a1', 'c', 'd']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { result: 'ft' })).sort(), ['a1', 'c']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { result: 'win' })), ['c']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { result: 'bust' })).sort(), ['b', 'x']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { year: '2025' })), ['d']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { game: 'omaha' })), ['c']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { venue: 'WYNN' })).sort(), ['c', 'd']);
+  assert.deepEqual(ids(RS.filterTournaments(all, { text: 'daily' })).sort(), ['b', 'd']);
+  assert.deepEqual(ids(RS.sortTournaments(all, 'date')), ['a1', 'b', 'c', 'x', 'd']);
+  assert.deepEqual(ids(RS.sortTournaments(all, 'roi')), ['c', 'a1', 'd', 'b', 'x']);
+  assert.deepEqual(ids(RS.sortTournaments(all, 'cash')).slice(0, 3), ['c', 'a1', 'd']);
+  assert.deepEqual(ids(RS.sortTournaments(all, 'finish')).slice(0, 3), ['c', 'a1', 'd']);
+  const s = RS.resultStats(all);
+  assert.deepEqual([s.tournaments, s.entries, s.spent, s.cashed, s.profit, s.itm, s.finalTables, s.wins, s.biggestCash, s.bestFinish.place], [5, 6, 2700, 12350, 9650, 3, 2, 1, 9000, 1]);
+  assert.equal(s.itmRate, 0.6);
+  const series = RS.profitSeries(all);
+  assert.deepEqual(series.map((p) => p.profit), [150, 100, 8000, 7850, 9650]);
+  assert.equal(RS.resultStats([]).roi, null);
+});

@@ -1,8 +1,9 @@
 /*
  * Tournament buy-ins: photograph a receipt, read it on the device (Tesseract OCR) to fill in the
  * venue, event, date, amounts, table and seat, and keep a log with the photo as proof.
- * Entries and photos are saved in this browser (IndexedDB), with JSON and CSV export.
- * Uses window.Receipt for reading the text.
+ * Entries and photos are saved in this browser (IndexedDB), with JSON and CSV export. Finished
+ * tournaments are archived to the Results tab. Uses window.Receipt for reading the text and
+ * window.Results for result helpers.
  */
 (function () {
   'use strict';
@@ -25,6 +26,7 @@
     ocr: '', // status line while reading
     year: '',
     dbError: '',
+    returnTo: '', // the tab to go back to after editing ('results' when opened from there)
   };
   let el = null;
   const urls = new Map(); // photo object URLs by entry id
@@ -77,7 +79,7 @@
 
   async function load() {
     try {
-      state.entries = await getAll();
+      state.entries = (await getAll()).map(upgrade);
       state.dbError = '';
     } catch (e) {
       state.entries = [];
@@ -147,6 +149,19 @@
     });
   }
 
+  // Older entries kept the finish as text ("22nd of 640"): split it into place and entrants.
+  function upgrade(e) {
+    if (typeof e.place === 'string' && e.place && !/^\d+$/.test(e.place)) {
+      const r = window.Results.parsePlace(e.place);
+      e.place = r.place;
+      if (e.entrants === undefined || e.entrants === '') e.entrants = r.entrants;
+    }
+    if (e.entrants === undefined) e.entrants = '';
+    if (e.archived === undefined) e.archived = false;
+    if (!ENTRY_TYPES.some((t) => t[0] === e.entryType)) e.entryType = 'entry';
+    return e;
+  }
+
   function newEntry() {
     const now = new Date();
     return {
@@ -154,7 +169,7 @@
       created: now.toISOString(), photoTaken: '', date: localStamp(now),
       venue: '', location: '', event: '', game: '', entryType: 'entry',
       buyIn: '', fee: '', total: '', payment: '', table: '', seat: '', stack: '', receiptNo: '', player: '',
-      cashed: '', place: '', notes: '', geo: null, hasPhoto: false, ocrText: '',
+      cashed: '', place: '', entrants: '', archived: false, finishedAt: '', notes: '', geo: null, hasPhoto: false, ocrText: '',
     };
   }
 
@@ -206,7 +221,7 @@
   // Page
   // ---------------------------------------------------------------------------
 
-  const visibleEntries = () => state.entries.filter((e) => !state.year || (e.date || '').startsWith(state.year))
+  const visibleEntries = () => state.entries.filter((e) => !e.archived && (!state.year || (e.date || '').startsWith(state.year)))
     .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created.localeCompare(a.created));
 
   function totals(list) {
@@ -221,13 +236,22 @@
       el.dataset.ready = '1';
       bind();
     }
-    load().then(() => { if (state.editing) renderForm(); else renderList(); });
+    load().then(() => {
+      if (state.pendingOpen) {
+        const id = state.pendingOpen;
+        state.pendingOpen = '';
+        if (openForm(id)) return;
+        state.returnTo = '';
+      }
+      if (state.editing) renderForm(); else renderList();
+    });
   }
 
   function renderList() {
     const list = visibleEntries();
     const t = totals(list);
-    const years = [...new Set(state.entries.map((e) => (e.date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+    const years = [...new Set(state.entries.filter((e) => !e.archived).map((e) => (e.date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+    const archived = state.entries.filter((e) => e.archived).length;
     el.innerHTML =
       '<div class="panel-head"><h2>Tournament buy-ins</h2><span class="hint">Photos and details are saved on this device only &middot; export to back them up</span></div>' +
       (state.dbError ? '<p class="board-error">' + esc(state.dbError) + '</p>' : '') +
@@ -236,7 +260,9 @@
         '<label class="bi-btn">Choose a photo<input type="file" accept="image/*" id="bi-file" hidden></label>' +
         '<button type="button" class="ghost" data-act="manual">+ Add by hand</button>' +
       '</div>' +
-      '<p class="hint">Take a picture of the receipt or table assignment. The app reads it on your device to fill in the venue, event, date and time, buy-in, fee, table and seat, and keeps the photo as proof.</p>' +
+      '<p class="hint">Take a picture of the receipt or table assignment. The app reads it on your device to fill in the venue, event, date and time, buy-in, fee, table and seat, and keeps the photo as proof. ' +
+        'When a tournament is over, open it, add your finish and cash, and move it to Results.</p>' +
+      '<h3 class="bi-h">Active buy-ins</h3>' +
       '<div class="bi-totals">' +
         '<label class="mn-field">Year<select id="bi-year"><option value="">All</option>' + years.map((y) => '<option' + (y === state.year ? ' selected' : '') + '>' + y + '</option>').join('') + '</select></label>' +
         '<div class="mn-stat"><span>Entries</span><strong>' + t.count + '</strong></div>' +
@@ -253,9 +279,11 @@
             (e.event ? '<span class="bi-event">' + esc(e.event) + '</span>' : '') +
             '<span class="bi-tags">' + (e.entryType !== 'entry' ? '<span class="pl-badge">' + ENTRY_TYPES.find((x) => x[0] === e.entryType)[1] + '</span>' : '') +
               (e.table ? '<span class="pl-badge">Table ' + esc(e.table) + (e.seat ? ', seat ' + esc(e.seat) : '') + '</span>' : '') +
-              (+e.cashed ? '<span class="pl-badge bi-cash">Cashed ' + money(e.cashed) + (e.place ? ' (' + esc(e.place) + ')' : '') + '</span>' : '') + '</span>' +
+              (+e.cashed ? '<span class="pl-badge bi-cash">Cashed ' + money(e.cashed) + '</span>' : '') +
+              (e.place ? '<span class="pl-badge">' + window.Results.ordinal(+e.place) + (e.entrants ? ' of ' + e.entrants : '') + '</span>' : '') + '</span>' +
           '</span><span class="bi-amt">' + (money(e.total) || '–') + '</span></button></li>').join('') + '</ul>'
-        : '<p class="bi-empty">No buy-ins logged' + (state.year ? ' in ' + state.year : ' yet') + '.</p>') +
+        : '<p class="bi-empty">No active buy-ins' + (state.year ? ' in ' + state.year : '') + '.</p>') +
+      (archived ? '<p class="bi-archived">' + archived + ' finished buy-in' + (archived === 1 ? ' is' : 's are') + ' in <button type="button" class="link" data-act="go-results">Results</button>.</p>' : '') +
       '<div class="pl-io"><button type="button" class="ghost" data-act="export">Backup (with photos)</button>' +
         '<button type="button" class="ghost" data-act="csv">Spreadsheet (CSV)</button>' +
         '<label class="pl-import ghost">Import backup<input type="file" id="bi-import" accept="application/json,.json" hidden></label></div>' +
@@ -271,8 +299,8 @@
       opts.map(([v, n]) => '<option value="' + v + '"' + (e[k] === v ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>';
     const money$ = ' inputmode="decimal" step="0.01" min="0"';
     el.innerHTML =
-      '<div class="bi-nav"><button type="button" class="link" data-act="cancel">&larr; All buy-ins</button></div>' +
-      '<h2 class="bi-title">' + (state.isNew ? 'New buy-in' : esc(e.venue || 'Buy-in')) + '</h2>' +
+      '<div class="bi-nav"><button type="button" class="link" data-act="cancel">&larr; ' + (state.returnTo === 'results' ? 'Results' : 'All buy-ins') + '</button></div>' +
+      '<h2 class="bi-title">' + (state.isNew ? 'New buy-in' : esc(e.venue || 'Buy-in')) + (e.archived ? ' <span class="pl-badge">In Results</span>' : '') + '</h2>' +
       '<div class="bi-form">' +
         '<div class="bi-photo">' + (e.hasPhoto ? '<a id="bi-photo-link" target="_blank" rel="noopener"><img id="bi-photo" alt="Receipt photo"></a><span class="hint">Tap the photo to see it full size.</span>' : '<p class="hint">No photo.</p>') +
           '<label class="bi-btn ghost">' + (e.hasPhoto ? 'Replace photo' : 'Add a photo') + '<input type="file" accept="image/*" capture="environment" id="bi-replace" hidden></label></div>' +
@@ -284,12 +312,17 @@
             f('buyIn', 'Buy-in (prize pool)', 'number', '', money$) + f('fee', 'Fee / rake', 'number', '', money$) + f('total', 'Total paid', 'number', '', money$) +
             f('payment', 'Paid with', 'text', 'Cash, card…') + f('table', 'Table', 'text') + f('seat', 'Seat', 'text') + f('stack', 'Starting stack', 'text') +
             f('receiptNo', 'Receipt / ticket #', 'text') + f('player', 'Name on receipt', 'text') +
-            f('cashed', 'Cashed ($)', 'number', '0', money$) + f('place', 'Finish', 'text', 'e.g. 14th of 312') +
           '</div>' +
+          '<fieldset class="bi-result"><legend>Result</legend><div class="bi-grid">' +
+            f('place', 'Finished (place)', 'number', 'e.g. 14', ' inputmode="numeric" min="1" step="1"') + f('entrants', 'Entrants', 'number', 'e.g. 312', ' inputmode="numeric" min="1" step="1"') +
+            f('cashed', 'Cashed ($)', 'number', '0', money$) +
+          '</div><p class="hint">For re-entries, put the result on any one of the entries.</p></fieldset>' +
           '<label class="mn-field pl-area">Notes<textarea data-f="notes" rows="2" placeholder="Anything else: bag number, late reg, who was at the table…">' + esc(e.notes) + '</textarea></label>' +
           '<div class="bi-proof" id="bi-proof"></div>' +
           (e.ocrText ? '<details class="bi-raw"><summary>Text read from the photo</summary><pre>' + esc(e.ocrText) + '</pre></details>' : '') +
-          '<div class="pl-foot"><button type="button" class="primary" data-act="save">Save</button><button type="button" class="ghost" data-act="cancel">Cancel</button>' +
+          '<div class="pl-foot"><button type="button" class="primary" data-act="save">Save</button>' +
+            (e.archived ? '<button type="button" data-act="unarchive">Move back to Buy-ins</button>' : '<button type="button" data-act="archive">Save &amp; move to Results</button>') +
+            '<button type="button" class="ghost" data-act="cancel">Cancel</button>' +
             (state.isNew ? '' : '<button type="button" class="ghost" data-act="delete">Delete</button>') + '</div>' +
         '</div>' +
       '</div>';
@@ -322,10 +355,18 @@
     el.querySelectorAll('[data-f]').forEach((i) => { e[i.dataset.f] = i.value.trim(); });
   }
 
-  async function save() {
+  // archive: true moves the entry (and its re-entries into the same event) to Results, false moves it back.
+  async function save(archive) {
     syncForm();
     const e = state.editing;
-    for (const k of ['buyIn', 'fee', 'total', 'cashed']) e[k] = e[k] === '' ? '' : +e[k];
+    for (const k of ['buyIn', 'fee', 'total', 'cashed', 'place', 'entrants']) e[k] = e[k] === '' || !Number.isFinite(+e[k]) ? '' : +e[k];
+    const siblings = [];
+    if (archive !== undefined) {
+      e.archived = archive;
+      e.finishedAt = archive ? new Date().toISOString() : '';
+      const key = window.Results.groupKey(e);
+      for (const o of state.entries) if (o.id !== e.id && o.archived !== archive && window.Results.groupKey(o) === key) siblings.push(Object.assign({}, o, { archived: archive, finishedAt: e.finishedAt }));
+    }
     if (e.total === '' && (e.buyIn !== '' || e.fee !== '')) e.total = (+e.buyIn || 0) + (+e.fee || 0);
     try {
       if (state.photo) {
@@ -333,14 +374,26 @@
         if (urls.has(e.id)) { URL.revokeObjectURL(urls.get(e.id)); urls.delete(e.id); }
       }
       await putEntry(e);
+      for (const o of siblings) await putEntry(o);
     } catch (ex) {
       state.ocr = 'Couldn’t save: ' + (ex.message || ex);
       renderForm();
       return;
     }
     closeForm();
+    if (leave()) return;
     await load();
     renderList();
+  }
+
+  // After editing an entry opened from Results, go back there.
+  function leave() {
+    const back = state.returnTo;
+    state.returnTo = '';
+    if (back !== 'results') return false;
+    const tab = document.querySelector('[data-view="results"]');
+    if (tab) tab.click();
+    return !!tab;
   }
 
   function closeForm() {
@@ -374,12 +427,12 @@
 
   function exportCSV() {
     const cols = [['date', 'Date'], ['venue', 'Venue'], ['location', 'Location'], ['event', 'Event'], ['game', 'Game'], ['entryType', 'Entry'], ['buyIn', 'Buy-in'], ['fee', 'Fee'],
-      ['total', 'Total paid'], ['payment', 'Paid with'], ['table', 'Table'], ['seat', 'Seat'], ['stack', 'Starting stack'], ['receiptNo', 'Receipt #'], ['cashed', 'Cashed'], ['place', 'Finish'],
+      ['total', 'Total paid'], ['payment', 'Paid with'], ['table', 'Table'], ['seat', 'Seat'], ['stack', 'Starting stack'], ['receiptNo', 'Receipt #'], ['cashed', 'Cashed'], ['place', 'Finish'], ['entrants', 'Entrants'], ['archived', 'In Results'],
       ['photoTaken', 'Photo taken'], ['created', 'Logged'], ['lat', 'Latitude'], ['lon', 'Longitude'], ['notes', 'Notes']];
     const cell = (v) => { const s = String(v == null ? '' : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const label = (list, v) => (list.find((x) => x[0] === v) || [v, v])[1];
-    const value = (e, k) => (k === 'lat' || k === 'lon' ? (e.geo ? e.geo[k] : '') : k === 'game' ? (e.game ? label(GAMES, e.game) : '') : k === 'entryType' ? label(ENTRY_TYPES, e.entryType) : e[k]);
-    const rows = visibleEntries().map((e) => cols.map(([k]) => cell(value(e, k))).join(','));
+    const value = (e, k) => (k === 'lat' || k === 'lon' ? (e.geo ? e.geo[k] : '') : k === 'game' ? (e.game ? label(GAMES, e.game) : '') : k === 'entryType' ? label(ENTRY_TYPES, e.entryType) : k === 'archived' ? (e.archived ? 'Yes' : 'No') : e[k]);
+    const rows = state.entries.filter((e) => !state.year || (e.date || '').startsWith(state.year)).sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((e) => cols.map(([k]) => cell(value(e, k))).join(','));
     download('poker-buyins' + (state.year ? '-' + state.year : '') + '.csv', 'text/csv', [cols.map((c) => c[1]).join(',')].concat(rows).join('\n'));
   }
 
@@ -393,7 +446,7 @@
       let added = 0;
       for (const raw of list) {
         if (!raw || !raw.id || have.has(raw.id)) continue;
-        const e = Object.assign(newEntry(), raw);
+        const e = upgrade(Object.assign(newEntry(), raw));
         delete e.photo;
         if (raw.photo) { const blob = await (await fetch(raw.photo)).blob(); await putPhoto(e.id, blob); e.hasPhoto = true; }
         await putEntry(e);
@@ -434,26 +487,18 @@
     });
     el.addEventListener('click', async (ev) => {
       const open = ev.target.closest('[data-open]');
-      if (open) {
-        const e = state.entries.find((x) => x.id === open.dataset.open);
-        if (!e) return;
-        state.editing = Object.assign({}, e);
-        state.isNew = false;
-        state.photo = null;
-        state.ocr = '';
-        state.filled = [];
-        renderForm();
-        el.scrollIntoView({ block: 'start' });
-        return;
-      }
+      if (open) { state.returnTo = ''; openForm(open.dataset.open); return; }
       const b = ev.target.closest('button[data-act]');
       if (!b) return;
       const act = b.dataset.act;
       if (act === 'manual') { state.editing = newEntry(); state.isNew = true; state.photo = null; state.ocr = ''; state.filled = []; renderForm(); } else if (act === 'save') save();
-      else if (act === 'cancel') { closeForm(); renderList(); } else if (act === 'delete') {
+      else if (act === 'archive') save(true);
+      else if (act === 'unarchive') save(false);
+      else if (act === 'go-results') { const tab = document.querySelector('[data-view="results"]'); if (tab) tab.click(); } else if (act === 'cancel') { closeForm(); if (!leave()) renderList(); } else if (act === 'delete') {
         if (!confirm('Delete this buy-in and its photo?')) return;
         await delEntry(state.editing.id).catch(() => {});
         closeForm();
+        if (leave()) return;
         await load();
         renderList();
       } else if (act === 'geo') {
@@ -468,5 +513,27 @@
     });
   }
 
-  window.BuyIns = { render };
+  function openForm(id) {
+    const e = state.entries.find((x) => x.id === id);
+    if (!e) return false;
+    state.editing = Object.assign({}, e);
+    state.isNew = false;
+    state.photo = null;
+    state.ocr = '';
+    state.filled = [];
+    renderForm();
+    el.scrollIntoView({ block: 'start' });
+    return true;
+  }
+
+  // Opens an entry's form from another tab (Results); `returnTo` is the tab to go back to.
+  function openEntry(id, returnTo) {
+    closeForm();
+    state.pendingOpen = id;
+    state.returnTo = returnTo || '';
+    const tab = document.querySelector('[data-view="buyins"]');
+    if (tab) tab.click(); else if (el) render(el);
+  }
+
+  window.BuyIns = { render, openEntry, store: { getAll: () => getAll().then((list) => list.map(upgrade)) } };
 })();
